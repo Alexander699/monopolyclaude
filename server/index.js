@@ -156,6 +156,15 @@ io.on('connection', (socket) => {
     socket.to(currentRoom).emit('state-update', { state });
   });
 
+  // --- Host broadcasts Global News card to all clients ---
+  socket.on('global-news', ({ card }) => {
+    if (!currentRoom) return;
+    const room = rooms.get(currentRoom);
+    if (!room || room.host !== socket.id) return;
+
+    socket.to(currentRoom).emit('global-news', { card });
+  });
+
   // --- Chat ---
   socket.on('chat', (msg) => {
     if (!currentRoom) return;

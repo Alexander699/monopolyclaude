@@ -228,6 +228,11 @@ export class NetworkManager {
     this.socket.emit('state-update', { state: this.stripCardDecks(state) });
   }
 
+  broadcastGlobalNews(card) {
+    if (!this.isHost || !this.socket) return;
+    this.socket.emit('global-news', { card });
+  }
+
   sendAction(action) {
     if (this.isHost) return; // Host processes locally
     if (!this.socket) {

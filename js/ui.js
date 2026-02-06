@@ -181,7 +181,8 @@ function renderLobby() {
         </div>
 
         <div class="lobby-panels">
-          <!-- Local Game Panel -->
+          <!-- Local Game Panel - hidden once an online room is active -->
+          ${!lobbyRoomCode ? `
           <div class="lobby-panel">
             <h2>🎮 Local Game</h2>
             <p class="panel-desc">Play on this device with friends</p>
@@ -212,6 +213,7 @@ function renderLobby() {
               </button>
             </div>
           </div>
+          ` : ''}
 
           <!-- Online Panel -->
           <div class="lobby-panel">
@@ -934,7 +936,8 @@ function renderActionPanel(currentPlayer, isMyTurn) {
 // ---- Property Management Panel ----
 function renderPropertyPanel() {
   const state = engine.state;
-  const currentPlayer = engine.getCurrentPlayer();
+  // In online mode, show the LOCAL player's properties, not whoever's turn it is
+  const currentPlayer = localPlayerId ? engine.getPlayerById(localPlayerId) : engine.getCurrentPlayer();
 
   let html = `
     <div class="modal-overlay" id="property-modal-overlay">
@@ -1007,7 +1010,8 @@ function renderPropertyPanel() {
 // ---- Trade Panel ----
 function renderTradePanel() {
   const state = engine.state;
-  const currentPlayer = engine.getCurrentPlayer();
+  // In online mode, use the LOCAL player for trade, not whoever's turn it is
+  const currentPlayer = localPlayerId ? engine.getPlayerById(localPlayerId) : engine.getCurrentPlayer();
   const otherPlayers = state.players.filter(p => !p.bankrupt && p.id !== currentPlayer.id);
 
   let html = `
@@ -1809,9 +1813,9 @@ function handleAnimation(type, data) {
       sound.playCard();
       currentCardDisplay = data.card;
       showCardModal = true;
-      // Broadcast Global News cards to all players
+      // Broadcast Global News cards to all players via server
       if (network && network.isHost && data.deckType === 'globalNews') {
-        network.broadcast({ type: 'global-news', card: data.card });
+        network.broadcastGlobalNews(data.card);
       }
       render();
       break;
