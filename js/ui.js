@@ -516,16 +516,6 @@ function renderGame() {
             ${renderActionPanel(currentPlayer, isMyTurn)}
           </div>
 
-          <!-- Activity Log (Recent) -->
-          <div class="activity-log-mini">
-            <h4>📋 Recent Activity</h4>
-            <div class="activity-entries">
-              ${state.log.slice(-5).reverse().map(entry => `
-                <div class="activity-entry ${entry.type}">${entry.message}</div>
-              `).join('')}
-            </div>
-          </div>
-
           <!-- Chat Panel (Always Visible) -->
           <div class="chat-panel-inline">
             <h4>💬 Chat</h4>

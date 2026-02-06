@@ -79,11 +79,10 @@ Countries produce: oil 🛢️, tech 💻, agriculture 🌾, tourism ✈️
   - Added `global-news` network message type for card broadcasting
 - **UI Redesign**:
   - Chat moved to bottom-right corner, always visible (no button needed)
-  - Added inline activity log showing recent 5 actions
   - Space detail card only shows to active player when buying (not to spectators)
   - Dice centered prominently in board center with total display
   - Game branding moved below dice (smaller, less intrusive)
-  - Right panel reorganized: Action Panel → Activity Log → Chat
+  - Right panel reorganized: Action Panel → Chat
 - **New Features**:
   - Player movement animation (tokens bounce when moving)
   - Dice total displayed below dice after roll

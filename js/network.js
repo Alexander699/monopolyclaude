@@ -485,6 +485,7 @@ export class NetworkManager {
     }
 
     this.log(`Starting game with ${this.players.length} players...`);
+    this.log(`Connections available: ${Array.from(this.connections.keys()).join(', ')}`);
 
     // Import and create game state
     import('./gameEngine.js').then(({ createGameState }) => {
@@ -496,30 +497,42 @@ export class NetworkManager {
         playerInfo.playerId = state.players[i].id;
       });
 
-      // Send game start to all players
-      this.players.forEach((playerInfo, i) => {
-        const gameStartData = {
-          type: 'game-start',
-          state: JSON.parse(JSON.stringify(state)), // Deep clone
-          localId: playerInfo.playerId,
-          playerIndex: i
-        };
+      // First, start game for host
+      this.localPlayerId = this.players[0].playerId;
+      this.callback('game-start', {
+        type: 'game-start',
+        state: JSON.parse(JSON.stringify(state)),
+        localId: this.players[0].playerId,
+        playerIndex: 0
+      });
 
-        if (i === 0) {
-          // Host
-          this.localPlayerId = playerInfo.playerId;
-          this.callback('game-start', gameStartData);
-        } else {
-          // Send to connected client
-          const conn = this.connections.get(playerInfo.name);
-          if (conn && conn.open) {
-            this.log(`Sending game-start to ${playerInfo.name}`);
-            conn.send(gameStartData);
-          } else {
-            this.log(`Cannot send game-start to ${playerInfo.name} - connection not open`, 'error');
+      // Then broadcast to ALL connections (not by player name lookup)
+      const gameStateForClients = JSON.parse(JSON.stringify(state));
+
+      for (const [name, conn] of this.connections) {
+        // Find the player info for this connection
+        const playerInfo = this.players.find(p => p.name === name);
+        if (playerInfo && conn) {
+          const gameStartData = {
+            type: 'game-start',
+            state: gameStateForClients,
+            localId: playerInfo.playerId,
+            playerIndex: this.players.indexOf(playerInfo)
+          };
+
+          try {
+            if (conn.open) {
+              this.log(`Sending game-start to ${name} (connection open)`);
+              conn.send(gameStartData);
+            } else {
+              this.log(`Connection to ${name} not open, trying anyway...`, 'warn');
+              conn.send(gameStartData);
+            }
+          } catch (e) {
+            this.log(`Error sending to ${name}: ${e.message}`, 'error');
           }
         }
-      });
+      }
 
       this.log('Game started successfully!');
     }).catch(err => {
