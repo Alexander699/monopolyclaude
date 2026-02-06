@@ -71,7 +71,28 @@ Countries produce: oil 🛢️, tech 💻, agriculture 🌾, tourism ✈️
 
 ## Recent Changes (Latest First)
 
-### v0.4 - Multiplayer Fixes (Current)
+### v0.5 - UI Overhaul & Multiplayer Fixes (Current)
+- **Multiplayer improvements**:
+  - Only host can start the game (removed start button for clients)
+  - Fixed board sync breaking after 2 turns (improved state merging)
+  - Global News cards now display to ALL players, not just the one who landed
+  - Added `global-news` network message type for card broadcasting
+- **UI Redesign**:
+  - Chat moved to bottom-right corner, always visible (no button needed)
+  - Added inline activity log showing recent 5 actions
+  - Space detail card only shows to active player when buying (not to spectators)
+  - Dice centered prominently in board center with total display
+  - Game branding moved below dice (smaller, less intrusive)
+  - Right panel reorganized: Action Panel → Activity Log → Chat
+- **New Features**:
+  - Player movement animation (tokens bounce when moving)
+  - Dice total displayed below dice after roll
+- **Code Improvements**:
+  - `sendChatMessage()` helper function for consistent chat handling
+  - `animatePlayerMovement()` function for smooth token movement
+  - Better state synchronization with deep merge for nested objects
+
+### v0.4 - Multiplayer Fixes
 - **Improved multiplayer reliability**:
   - Rewrote network.js with better connection handling
   - Added connection retry logic (up to 4 attempts)
@@ -106,17 +127,18 @@ Countries produce: oil 🛢️, tech 💻, agriculture 🌾, tourism ✈️
 
 ## Known Issues & TODO
 
-### CRITICAL: Multiplayer Not Working
-**Problem**: PeerJS WebRTC connections fail in many scenarios:
-- Same browser tabs (localhost testing)
-- Different networks (NAT/firewall issues)
-- GitHub Pages deployment
+### Multiplayer Limitations
+**Note**: PeerJS WebRTC connections can be unreliable in some scenarios:
+- Same browser tabs (use different browsers for testing)
+- Strict firewalls/NAT (may block peer-to-peer connections)
+- Some corporate networks
 
-**Root Cause**:
-- WebRTC requires both peers to exchange ICE candidates via signaling server
-- PeerJS public server is unreliable
-- No TURN server fallback for relaying when direct connection fails
-- Same-origin tabs may have issues with peer discovery
+**Current Workarounds**:
+- TURN servers configured for better NAT traversal
+- Connection retry logic (up to 4 attempts)
+- Colored console logging for debugging ([HOST] green, [CLIENT] green, errors red)
+
+**Future Solution**: Replace PeerJS with WebSocket server for 100% reliable connections
 
 **Solution Needed**: Replace PeerJS with WebSocket server:
 1. Create Node.js/Express + Socket.io backend

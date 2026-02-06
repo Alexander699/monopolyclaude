@@ -314,11 +314,11 @@ function attachLobbyEvents() {
     });
   }
 
-  // Start online game
+  // Start online game - ONLY host can start
   const startOnlineBtn = document.querySelector('.start-online-btn');
-  if (startOnlineBtn) {
+  if (startOnlineBtn && lobbyIsHost) {
     startOnlineBtn.addEventListener('click', () => {
-      if (network && lobbyIsHost) {
+      if (network && lobbyIsHost && lobbyPlayers.length >= 2) {
         network.startGame();
       }
     });
@@ -381,7 +381,15 @@ function hostOnlineGame(name) {
         break;
       case 'state-update':
         if (engine) {
-          engine.state = data.state;
+          // Deep merge state to preserve engine methods
+          Object.assign(engine.state, data.state);
+          // Also update the board array properly
+          if (data.state.board) {
+            engine.state.board = data.state.board;
+          }
+          if (data.state.players) {
+            engine.state.players = data.state.players;
+          }
           render();
         }
         break;
@@ -425,7 +433,23 @@ function joinOnlineGame(name, code) {
         break;
       case 'state-update':
         if (engine) {
-          engine.state = data.state;
+          // Deep merge state to preserve engine methods
+          Object.assign(engine.state, data.state);
+          // Also update the board array properly
+          if (data.state.board) {
+            engine.state.board = data.state.board;
+          }
+          if (data.state.players) {
+            engine.state.players = data.state.players;
+          }
+          render();
+        }
+        break;
+      case 'global-news':
+        // Show global news card to all players
+        if (data.card) {
+          currentCardDisplay = data.card;
+          showCardModal = true;
           render();
         }
         break;
@@ -468,8 +492,7 @@ function renderGame() {
         <div class="top-bar-right">
           <button class="icon-btn" id="btn-sound" title="Toggle Sound">${sound.enabled ? '🔊' : '🔇'}</button>
           <button class="icon-btn" id="btn-music" title="Toggle Music">${sound.musicEnabled ? '🎵' : '🎵'}</button>
-          <button class="icon-btn" id="btn-log" title="Game Log">📋</button>
-          <button class="icon-btn" id="btn-chat" title="Chat">💬</button>
+          <button class="icon-btn" id="btn-log" title="Full Game Log">📋</button>
           <button class="icon-btn" id="btn-save" title="Save Game">💾</button>
         </div>
       </div>
@@ -486,9 +509,39 @@ function renderGame() {
           ${renderBoard()}
         </div>
 
-        <!-- Action Panel (Right) -->
-        <div class="action-panel">
-          ${renderActionPanel(currentPlayer, isMyTurn)}
+        <!-- Right Side Panel -->
+        <div class="right-panel">
+          <!-- Action Panel -->
+          <div class="action-panel">
+            ${renderActionPanel(currentPlayer, isMyTurn)}
+          </div>
+
+          <!-- Activity Log (Recent) -->
+          <div class="activity-log-mini">
+            <h4>📋 Recent Activity</h4>
+            <div class="activity-entries">
+              ${state.log.slice(-5).reverse().map(entry => `
+                <div class="activity-entry ${entry.type}">${entry.message}</div>
+              `).join('')}
+            </div>
+          </div>
+
+          <!-- Chat Panel (Always Visible) -->
+          <div class="chat-panel-inline">
+            <h4>💬 Chat</h4>
+            <div class="chat-messages-mini" id="chat-messages-mini">
+              ${chatMessages.slice(-10).map(msg => `
+                <div class="chat-msg">
+                  <span class="chat-name" style="color:${msg.color || '#fff'}">${msg.name}:</span>
+                  <span class="chat-text">${msg.text}</span>
+                </div>
+              `).join('') || '<div class="no-messages">No messages yet</div>'}
+            </div>
+            <div class="chat-input-mini">
+              <input type="text" id="chat-input-mini" placeholder="Type a message..." maxlength="200" />
+              <button class="btn btn-sm btn-primary" id="btn-send-chat-mini">Send</button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -496,7 +549,6 @@ function renderGame() {
       ${showPropertyPanel ? renderPropertyPanel() : ''}
       ${showTradePanel ? renderTradePanel() : ''}
       ${showLogPanel ? renderLogPanel() : ''}
-      ${showChatPanel ? renderChatPanel() : ''}
       ${showCardModal ? renderCardModal() : ''}
       ${state.gameOver ? renderGameOverOverlay() : ''}
     </div>
@@ -558,19 +610,27 @@ function renderBoard() {
   const state = engine.state;
   let html = '<div class="board">';
 
-  // Render center area
+  // Render center area - dice centered prominently
   html += '<div class="board-center">';
-  html += '<div class="center-logo">🌍</div>';
-  html += '<div class="center-title">GLOBAL<br>ECONOMIC<br>WARS</div>';
+
+  // Dice display - centered and prominent
   html += '<div class="center-dice-area">';
-  // Always show dice display (shows last values or initial 1,1)
-  // Only add 'rolling' class if both animation flags are true
   const shouldShowRolling = animatingDice && diceAnimationInProgress;
   html += `<div class="dice-display ${shouldShowRolling ? 'rolling' : ''}">`;
   html += `<div class="die">${getDiceFace(diceValues[0])}</div>`;
   html += `<div class="die">${getDiceFace(diceValues[1])}</div>`;
   html += `</div>`;
+  // Show dice total
+  const diceTotal = diceValues[0] + diceValues[1];
+  html += `<div class="dice-total">${diceTotal > 0 ? diceTotal : ''}</div>`;
   html += '</div>';
+
+  // Small game title below dice
+  html += '<div class="center-branding">';
+  html += '<div class="center-logo">🌍</div>';
+  html += '<div class="center-title-mini">Global Economic Wars</div>';
+  html += '</div>';
+
   html += '</div>';
 
   // Render all 40 spaces
@@ -636,7 +696,7 @@ function renderBoard() {
     if (playersHere.length > 0) {
       html += `<div class="player-tokens">`;
       playersHere.forEach(p => {
-        html += `<div class="player-token" style="background:${p.color}" title="${p.name}">${p.avatar}</div>`;
+        html += `<div class="player-token" data-player="${p.id}" style="background:${p.color}" title="${p.name}">${p.avatar}</div>`;
       });
       html += `</div>`;
     }
@@ -711,11 +771,13 @@ function renderActionPanel(currentPlayer, isMyTurn) {
 
   let html = '<div class="action-content">';
 
-  // Current space info
+  // Current space info - only show detailed card to active player when they can buy
+  const showDetailedCard = isMyTurn && space.type === 'country' && state.phase === 'action' && !space.owner;
+
   html += `
     <div class="current-space-info">
-      <h3>📍 ${space.name}</h3>
-      ${space.type === 'country' ? `
+      <h3>📍 ${currentPlayer.name} is on ${space.name}</h3>
+      ${showDetailedCard ? `
         <div class="space-detail-card" style="border-color:${ALLIANCES[space.alliance]?.color || '#ccc'}">
           <div class="sdc-header" style="background:${ALLIANCES[space.alliance]?.color || '#ccc'}">
             <span>${getFlagHtml(space.flag)} ${space.name}</span>
@@ -728,11 +790,7 @@ function renderActionPanel(currentPlayer, isMyTurn) {
               <div class="sdc-row"><span>${DEVELOPMENT_TIERS[i+1]?.icon || ''} ${DEVELOPMENT_TIERS[i+1]?.name || ''}:</span><span>$${r}</span></div>
             `).join('')}
             <div class="sdc-row"><span>Resource:</span><span>${space.resource}</span></div>
-            ${space.owner ? `
-              <div class="sdc-row"><span>Owner:</span><span style="color:${engine.getPlayerById(space.owner)?.color}">${engine.getPlayerById(space.owner)?.name}</span></div>
-              <div class="sdc-row"><span>Level:</span><span>${DEVELOPMENT_TIERS[space.developmentLevel].name}</span></div>
-              <div class="sdc-row"><span>Current Rent:</span><span>$${engine.calculateRent(space.id, 7)}</span></div>
-            ` : '<div class="sdc-unowned">UNOWNED</div>'}
+            <div class="sdc-unowned">UNOWNED - Available to buy!</div>
           </div>
         </div>
       ` : ''}
@@ -1248,7 +1306,13 @@ function attachGameEvents() {
     btn.addEventListener('click', () => engine.rejectTrade(btn.dataset.rejectTrade));
   });
 
-  // Chat
+  // Chat - inline mini chat
+  document.getElementById('btn-send-chat-mini')?.addEventListener('click', handleSendChatMini);
+  document.getElementById('chat-input-mini')?.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') handleSendChatMini();
+  });
+
+  // Chat - modal chat (legacy)
   document.getElementById('btn-send-chat')?.addEventListener('click', handleSendChat);
   document.getElementById('chat-input')?.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') handleSendChat();
@@ -1450,10 +1514,31 @@ function handleSendTrade() {
 function handleSendChat() {
   const input = document.getElementById('chat-input');
   if (!input || !input.value.trim()) return;
-  const player = engine.getCurrentPlayer();
+  sendChatMessage(input);
+}
+
+function handleSendChatMini() {
+  const input = document.getElementById('chat-input-mini');
+  if (!input || !input.value.trim()) return;
+  sendChatMessage(input);
+}
+
+function sendChatMessage(input) {
+  if (!engine) return;
+  // Get local player or current player in local mode
+  let playerName, playerColor;
+  if (localPlayerId) {
+    const localPlayer = engine.getPlayerById(localPlayerId);
+    playerName = localPlayer?.name || 'Unknown';
+    playerColor = localPlayer?.color || '#fff';
+  } else {
+    const player = engine.getCurrentPlayer();
+    playerName = player.name;
+    playerColor = player.color;
+  }
   const msg = {
-    name: player.name,
-    color: player.color,
+    name: playerName,
+    color: playerColor,
     text: input.value.trim(),
     time: Date.now()
   };
@@ -1495,6 +1580,10 @@ function handleAnimation(type, data) {
       break;
     case 'move':
       sound.playMove();
+      // Animate player movement from cell to cell
+      if (data && data.from !== undefined && data.to !== undefined) {
+        animatePlayerMovement(data.playerId, data.from, data.to);
+      }
       break;
     case 'purchase':
       sound.playPurchase();
@@ -1506,6 +1595,10 @@ function handleAnimation(type, data) {
       sound.playCard();
       currentCardDisplay = data.card;
       showCardModal = true;
+      // Broadcast Global News cards to all players
+      if (network && network.isHost && data.deckType === 'globalNews') {
+        network.broadcast({ type: 'global-news', card: data.card });
+      }
       render();
       break;
     case 'sanctions':
@@ -1521,6 +1614,67 @@ function handleAnimation(type, data) {
       sound.playDevelop();
       break;
   }
+}
+
+// ---- Movement Animation ----
+
+let movementAnimationInProgress = false;
+
+function animatePlayerMovement(playerId, fromPos, toPos) {
+  if (movementAnimationInProgress) return;
+
+  const player = engine?.getPlayerById(playerId);
+  if (!player) return;
+
+  // Calculate path (handles wrapping around GO)
+  const path = [];
+  let current = fromPos;
+  while (current !== toPos) {
+    current = (current + 1) % 40;
+    path.push(current);
+  }
+
+  if (path.length === 0) return;
+
+  movementAnimationInProgress = true;
+
+  // Create a floating token for animation
+  const board = document.querySelector('.board');
+  if (!board) {
+    movementAnimationInProgress = false;
+    return;
+  }
+
+  // Get positions of spaces for animation
+  let stepIndex = 0;
+
+  function animateStep() {
+    if (stepIndex >= path.length) {
+      movementAnimationInProgress = false;
+      render(); // Final render to show player at destination
+      return;
+    }
+
+    const targetPos = path[stepIndex];
+    const targetSpace = document.querySelector(`[data-space-id="${targetPos}"]`);
+
+    if (targetSpace) {
+      // Find player token and add a pulse effect
+      const playerTokens = document.querySelectorAll(`.player-token[data-player="${playerId}"]`);
+      playerTokens.forEach(token => {
+        token.classList.add('moving');
+      });
+    }
+
+    stepIndex++;
+
+    // Speed up animation - 100ms per space, but cap at 8 steps shown
+    const delay = path.length > 8 ? 50 : 100;
+    setTimeout(animateStep, delay);
+  }
+
+  // Start animation
+  setTimeout(animateStep, 100);
 }
 
 // ---- Helpers ----
