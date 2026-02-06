@@ -1,0 +1,14 @@
+{
+  "name": "global-econ-wars-server",
+  "version": "1.0.0",
+  "description": "Socket.IO relay server for Global Economic Wars",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.0",
+    "socket.io": "^4.7.5"
+  }
+}

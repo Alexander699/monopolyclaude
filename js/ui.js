@@ -124,7 +124,9 @@ function render() {
 
 // Separate function to render room code display - makes host/client logic clearer
 function renderRoomCodeDisplay() {
-  console.log('[RENDER] renderRoomCodeDisplay - lobbyIsHost:', lobbyIsHost);
+  // Double-check: lobbyIsHost must be true AND network must confirm host status
+  const isHost = lobbyIsHost === true && (!network || network.isHost === true);
+  console.log('[RENDER] renderRoomCodeDisplay - isHost:', isHost, 'lobbyIsHost:', lobbyIsHost, 'network.isHost:', network?.isHost);
 
   const playerChips = lobbyPlayers.map((p, i) => `
     <div class="lobby-player-chip" style="border-color:${PLAYER_COLORS[i]}">
@@ -134,11 +136,11 @@ function renderRoomCodeDisplay() {
 
   // CRITICAL: Only host gets the start button
   let actionArea = '';
-  if (lobbyIsHost === true) {
+  if (isHost) {
     console.log('[RENDER] Rendering HOST start button');
     actionArea = `
       <button class="btn btn-primary btn-lg start-online-btn" ${lobbyPlayers.length < 2 ? 'disabled' : ''}>
-        🚀 Start Game
+        🚀 Start Game (Host)
       </button>
     `;
   } else {
@@ -340,26 +342,18 @@ function attachLobbyEvents() {
 
   // Start online game - button only exists for host (rendered conditionally)
   const startOnlineBtn = document.querySelector('.start-online-btn');
-  if (startOnlineBtn && lobbyIsHost) {
+  const isHost = lobbyIsHost === true && network && network.isHost === true;
+  if (startOnlineBtn && isHost) {
     console.log('[UI] Attaching click handler to Start button (host only)');
     startOnlineBtn.addEventListener('click', () => {
-      console.log('[UI] Start button clicked!');
-      console.log('[UI] lobbyIsHost:', lobbyIsHost);
-      console.log('[UI] lobbyPlayers.length:', lobbyPlayers.length);
-      console.log('[UI] network exists:', !!network);
-
-      if (network && lobbyPlayers.length >= 2) {
-        console.log('[UI] All conditions met, calling network.startGame()');
+      if (network && network.isHost && lobbyPlayers.length >= 2) {
+        console.log('[UI] Starting game...');
         network.startGame();
-      } else {
-        console.log('[UI] Cannot start - conditions not met');
-        if (!network) console.log('[UI] - No network');
-        if (lobbyPlayers.length < 2) console.log('[UI] - Not enough players');
       }
     });
-  } else if (startOnlineBtn && !lobbyIsHost) {
-    // This should never happen now, but just in case
-    console.error('[UI] ERROR: Start button exists but lobbyIsHost is false! Removing button.');
+  } else if (startOnlineBtn && !isHost) {
+    // Safety: remove button if it somehow rendered for a non-host
+    console.error('[UI] ERROR: Start button exists but player is not host! Removing.');
     startOnlineBtn.remove();
   }
 
@@ -440,6 +434,9 @@ function hostOnlineGame(name) {
           }
           render();
         }
+        break;
+      case 'action':
+        handleRemoteAction(data);
         break;
       case 'chat':
         chatMessages.push(data);
@@ -1289,23 +1286,42 @@ function attachGameEvents() {
   document.querySelectorAll('[data-develop]').forEach(btn => {
     btn.addEventListener('click', () => {
       const pid = parseInt(btn.dataset.develop);
+      if (isOnlineClient()) {
+        network.sendAction({ actionType: 'develop-property', spaceId: pid });
+        return;
+      }
       engine.developProperty(engine.getCurrentPlayer().id, pid);
       sound.playDevelop();
     });
   });
   document.querySelectorAll('[data-mortgage]').forEach(btn => {
     btn.addEventListener('click', () => {
-      engine.mortgageProperty(engine.getCurrentPlayer().id, parseInt(btn.dataset.mortgage));
+      const spaceId = parseInt(btn.dataset.mortgage);
+      if (isOnlineClient()) {
+        network.sendAction({ actionType: 'mortgage-property', spaceId });
+        return;
+      }
+      engine.mortgageProperty(engine.getCurrentPlayer().id, spaceId);
     });
   });
   document.querySelectorAll('[data-unmortgage]').forEach(btn => {
     btn.addEventListener('click', () => {
-      engine.unmortgageProperty(engine.getCurrentPlayer().id, parseInt(btn.dataset.unmortgage));
+      const spaceId = parseInt(btn.dataset.unmortgage);
+      if (isOnlineClient()) {
+        network.sendAction({ actionType: 'unmortgage-property', spaceId });
+        return;
+      }
+      engine.unmortgageProperty(engine.getCurrentPlayer().id, spaceId);
     });
   });
   document.querySelectorAll('[data-sell-dev]').forEach(btn => {
     btn.addEventListener('click', () => {
-      engine.sellDevelopment(engine.getCurrentPlayer().id, parseInt(btn.dataset.sellDev));
+      const spaceId = parseInt(btn.dataset.sellDev);
+      if (isOnlineClient()) {
+        network.sendAction({ actionType: 'sell-development', spaceId });
+        return;
+      }
+      engine.sellDevelopment(engine.getCurrentPlayer().id, spaceId);
     });
   });
 
@@ -1347,10 +1363,24 @@ function attachGameEvents() {
 
   // Accept/reject trades
   document.querySelectorAll('[data-accept-trade]').forEach(btn => {
-    btn.addEventListener('click', () => engine.acceptTrade(btn.dataset.acceptTrade));
+    btn.addEventListener('click', () => {
+      const tradeId = btn.dataset.acceptTrade;
+      if (isOnlineClient()) {
+        network.sendAction({ actionType: 'accept-trade', tradeId });
+        return;
+      }
+      engine.acceptTrade(tradeId);
+    });
   });
   document.querySelectorAll('[data-reject-trade]').forEach(btn => {
-    btn.addEventListener('click', () => engine.rejectTrade(btn.dataset.rejectTrade));
+    btn.addEventListener('click', () => {
+      const tradeId = btn.dataset.rejectTrade;
+      if (isOnlineClient()) {
+        network.sendAction({ actionType: 'reject-trade', tradeId });
+        return;
+      }
+      engine.rejectTrade(tradeId);
+    });
   });
 
   // Chat - inline mini chat
@@ -1403,6 +1433,73 @@ function canPerformAction() {
   return true;
 }
 
+// Check if we are an online client (not host) - actions should be sent to host
+function isOnlineClient() {
+  return network && !network.isHost && localPlayerId;
+}
+
+// Host: process an action received from a remote client
+function handleRemoteAction(data) {
+  if (!engine) return;
+  console.log('[UI-HOST] Processing remote action:', data.actionType);
+
+  switch (data.actionType) {
+    case 'roll-dice':
+      if (engine.state.phase === 'pre-roll') {
+        engine.rollDiceAction();
+      }
+      break;
+    case 'pay-bail':
+      engine.payBail(engine.getCurrentPlayer());
+      break;
+    case 'use-immunity': {
+      const p = engine.getCurrentPlayer();
+      p.hasGetOutFree = true;
+      engine.payBail(p);
+      break;
+    }
+    case 'buy-property':
+      engine.buyProperty(engine.getCurrentPlayer().id);
+      break;
+    case 'decline-purchase':
+      engine.declinePurchase();
+      break;
+    case 'end-turn':
+      engine.endTurn();
+      break;
+    case 'influence-action': {
+      const player = engine.getCurrentPlayer();
+      if (data.action === 'embargo' && data.targetId) {
+        engine.useInfluenceAction(player.id, data.action, data.targetId);
+      } else {
+        engine.useInfluenceAction(player.id, data.action);
+      }
+      break;
+    }
+    case 'propose-trade':
+      engine.proposeTrade(engine.getCurrentPlayer().id, data.partnerId, data.offer);
+      break;
+    case 'accept-trade':
+      engine.acceptTrade(data.tradeId);
+      break;
+    case 'reject-trade':
+      engine.rejectTrade(data.tradeId);
+      break;
+    case 'develop-property':
+      engine.developProperty(engine.getCurrentPlayer().id, data.spaceId);
+      break;
+    case 'mortgage-property':
+      engine.mortgageProperty(engine.getCurrentPlayer().id, data.spaceId);
+      break;
+    case 'unmortgage-property':
+      engine.unmortgageProperty(engine.getCurrentPlayer().id, data.spaceId);
+      break;
+    case 'sell-development':
+      engine.sellDevelopment(engine.getCurrentPlayer().id, data.spaceId);
+      break;
+  }
+}
+
 function handleRollDice() {
   // Defensive checks - ALL checks BEFORE any animation
   if (!engine) {
@@ -1439,7 +1536,35 @@ function handleRollDice() {
     return;
   }
 
-  // All checks passed - start the animation
+  // Online client: send action to host, show local animation
+  if (isOnlineClient()) {
+    network.sendAction({ actionType: 'roll-dice' });
+    // Play local dice animation for responsiveness
+    diceAnimationInProgress = true;
+    animatingDice = true;
+    sound.playDiceRoll();
+    let rolls = 0;
+    const animInterval = setInterval(() => {
+      diceValues = [Math.floor(Math.random() * 6) + 1, Math.floor(Math.random() * 6) + 1];
+      rolls++;
+      const diceDisplay = document.querySelector('.dice-display');
+      if (diceDisplay) {
+        diceDisplay.innerHTML = `<div class="die">${getDiceFace(diceValues[0])}</div><div class="die">${getDiceFace(diceValues[1])}</div>`;
+        diceDisplay.classList.add('rolling');
+      }
+      if (rolls >= 10) {
+        clearInterval(animInterval);
+        animatingDice = false;
+        diceAnimationInProgress = false;
+        const diceEl = document.querySelector('.dice-display');
+        if (diceEl) diceEl.classList.remove('rolling');
+        // State update from host will trigger render with actual dice values
+      }
+    }, 80);
+    return;
+  }
+
+  // Host or local: process locally
   diceAnimationInProgress = true;
   animatingDice = true;
   sound.playDiceRoll();
@@ -1494,6 +1619,10 @@ function handleRollDice() {
 
 function handlePayBail() {
   if (!canPerformAction()) return;
+  if (isOnlineClient()) {
+    network.sendAction({ actionType: 'pay-bail' });
+    return;
+  }
   const player = engine.getCurrentPlayer();
   engine.payBail(player);
   render();
@@ -1501,6 +1630,10 @@ function handlePayBail() {
 
 function handleUseImmunity() {
   if (!canPerformAction()) return;
+  if (isOnlineClient()) {
+    network.sendAction({ actionType: 'use-immunity' });
+    return;
+  }
   const player = engine.getCurrentPlayer();
   player.hasGetOutFree = true;
   engine.payBail(player);
@@ -1509,6 +1642,10 @@ function handleUseImmunity() {
 
 function handleBuyProperty() {
   if (!canPerformAction()) return;
+  if (isOnlineClient()) {
+    network.sendAction({ actionType: 'buy-property' });
+    return;
+  }
   const player = engine.getCurrentPlayer();
   const success = engine.buyProperty(player.id);
   if (success) sound.playPurchase();
@@ -1517,12 +1654,20 @@ function handleBuyProperty() {
 
 function handleDecline() {
   if (!canPerformAction()) return;
+  if (isOnlineClient()) {
+    network.sendAction({ actionType: 'decline-purchase' });
+    return;
+  }
   engine.declinePurchase();
 }
 
 function handleEndTurn() {
   if (!engine) return;
   if (!canPerformAction()) return;
+  if (isOnlineClient()) {
+    network.sendAction({ actionType: 'end-turn' });
+    return;
+  }
 
   try {
     engine.endTurn();
@@ -1536,8 +1681,16 @@ function handleEndTurn() {
 function handleInfluenceAction(action) {
   if (!canPerformAction()) return;
   const player = engine.getCurrentPlayer();
+  if (isOnlineClient()) {
+    let targetId = null;
+    if (action === 'embargo') {
+      const others = engine.getActivePlayers().filter(p => p.id !== player.id);
+      if (others.length > 0) targetId = others[0].id;
+    }
+    network.sendAction({ actionType: 'influence-action', action, targetId });
+    return;
+  }
   if (action === 'embargo') {
-    // Need to select target - for now pick first opponent
     const others = engine.getActivePlayers().filter(p => p.id !== player.id);
     if (others.length > 0) {
       engine.useInfluenceAction(player.id, action, others[0].id);
@@ -1549,6 +1702,15 @@ function handleInfluenceAction(action) {
 
 function handleSendTrade() {
   if (!selectedTradePartner) return;
+  if (isOnlineClient()) {
+    network.sendAction({ actionType: 'propose-trade', partnerId: selectedTradePartner, offer: { ...tradeOffer } });
+    showTradePanel = false;
+    tradeOffer = { giveMoney: 0, getMoney: 0, giveProperties: [], getProperties: [] };
+    selectedTradePartner = null;
+    sound.playClick();
+    render();
+    return;
+  }
   const player = engine.getCurrentPlayer();
   engine.proposeTrade(player.id, selectedTradePartner, { ...tradeOffer });
   showTradePanel = false;
@@ -1589,8 +1751,13 @@ function sendChatMessage(input) {
     text: input.value.trim(),
     time: Date.now()
   };
-  chatMessages.push(msg);
-  if (network) network.sendChat(msg);
+  if (network) {
+    // network.sendChat() handles adding locally via callback('chat', msg)
+    network.sendChat(msg);
+  } else {
+    // Local mode - add directly
+    chatMessages.push(msg);
+  }
   input.value = '';
   render();
 }
