@@ -53,6 +53,9 @@ export class NetworkManager {
     this.maxReconnectAttempts = 5;
     this.connectionRetryDelay = 2000;
     this.pendingConnections = new Map(); // For tracking connection attempts
+    this._keepAliveInterval = null;
+    this._gameStartAcked = new Set();
+    this._gameStarted = false;
   }
 
   generateRoomCode() {
@@ -88,6 +91,12 @@ export class NetworkManager {
       this.peer.on('open', (id) => {
         this.log(`Host peer opened with ID: ${id}`);
         this.players[0].peerId = id;
+
+        // Start keep-alive pings to prevent connections from going stale
+        this._keepAliveInterval = setInterval(() => {
+          this.pingAll();
+        }, 10000); // Every 10 seconds
+
         callback('room-created', { code: this.roomCode });
       });
 
@@ -233,7 +242,11 @@ export class NetworkManager {
     conn.on('close', () => {
       this.log('Connection to host closed', 'warn');
       this.connections.delete('host');
-      callback('error', { message: 'Lost connection to host. The game session has ended.' });
+      // Use the stored callback (this.callback) instead of the parameter,
+      // since the callback may have been updated after game-start
+      if (this.callback) {
+        this.callback('error', { message: 'Lost connection to host. The game session has ended.' });
+      }
     });
 
     conn.on('error', (err) => {
@@ -314,6 +327,13 @@ export class NetworkManager {
         this.callback('chat', data);
         break;
 
+      case 'game-start-ack':
+        // Client acknowledged receiving game-start
+        if (!this._gameStartAcked) this._gameStartAcked = new Set();
+        this._gameStartAcked.add(data.name);
+        this.log(`Game start acknowledged by: ${data.name}`);
+        break;
+
       case 'ping':
         conn.send({ type: 'pong' });
         break;
@@ -376,12 +396,35 @@ export class NetworkManager {
         break;
 
       case 'game-start':
+        // Prevent processing duplicate game-start messages
+        if (this._gameStarted) {
+          this.log('Ignoring duplicate game-start message');
+          break;
+        }
+        this._gameStarted = true;
+
         this.log(`=== GAME STARTING ===`);
         this.log(`Local player ID: ${data.localId}`);
         this.log(`Player index: ${data.playerIndex}`);
         this.log(`State has ${data.state?.players?.length || 0} players`);
+        this.log(`State board has ${data.state?.board?.length || 0} spaces`);
         this.localPlayerId = data.localId;
+
+        // Send acknowledgement to host
+        const hostConn = this.connections.get('host');
+        if (hostConn && hostConn.open) {
+          hostConn.send({ type: 'game-start-ack', name: this.playerName });
+          this.log('Sent game-start-ack to host');
+        }
+
         this.callback('game-start', data);
+        break;
+
+      case 'game-start-confirm':
+        // Host is confirming game-start was sent - if we haven't received game-start yet, log it
+        if (!this._gameStarted) {
+          this.log('Received game-start-confirm but no game-start yet - waiting for data...', 'warn');
+        }
         break;
 
       case 'state-update':
@@ -479,6 +522,17 @@ export class NetworkManager {
     }
   }
 
+  // Strip large card decks from state to reduce message size for WebRTC
+  stripCardDecks(state) {
+    const stripped = JSON.parse(JSON.stringify(state));
+    // Card decks are only needed on the host - clients get card effects via state updates
+    stripped.globalNewsDeck = [];
+    stripped.diplomaticDeck = [];
+    stripped.globalNewsDiscard = [];
+    stripped.diplomaticDiscard = [];
+    return stripped;
+  }
+
   startGame() {
     this.log('=== startGame() called ===');
     this.log(`isHost: ${this.isHost}`);
@@ -531,8 +585,10 @@ export class NetworkManager {
         playerIndex: 0
       });
 
-      // Then send to ALL clients
-      const gameStateForClients = JSON.parse(JSON.stringify(state));
+      // Strip card decks to reduce payload size for WebRTC data channels
+      const gameStateForClients = this.stripCardDecks(state);
+      const stateJson = JSON.stringify(gameStateForClients);
+      this.log(`Client state payload size: ${stateJson.length} bytes`);
 
       this.log(`Sending game-start to ${this.connections.size} client(s)...`);
 
@@ -555,9 +611,37 @@ export class NetworkManager {
         };
 
         try {
+          if (!conn.open) {
+            this.log(`WARNING: Connection to "${name}" is NOT open, attempting to send anyway`, 'warn');
+          }
           this.log(`Sending game-start to "${name}" (index: ${playerIndex}, ID: ${playerInfo.playerId}, conn.open: ${conn.open})`);
           conn.send(gameStartData);
           this.log(`SUCCESS: game-start sent to ${name}`);
+
+          // Send a follow-up confirmation ping after a short delay
+          // This helps ensure the data channel is flushed
+          setTimeout(() => {
+            try {
+              if (conn.open) {
+                conn.send({ type: 'game-start-confirm' });
+                this.log(`Sent game-start-confirm to ${name}`);
+              }
+            } catch (e) {
+              this.log(`Failed to send confirm to ${name}: ${e.message}`, 'warn');
+            }
+          }, 500);
+
+          // Retry game-start after 3 seconds if client hasn't acknowledged
+          setTimeout(() => {
+            if (conn.open && !this._gameStartAcked?.has(name)) {
+              this.log(`Retrying game-start to "${name}" (no ack received)`, 'warn');
+              try {
+                conn.send(gameStartData);
+              } catch (e) {
+                this.log(`Retry failed for ${name}: ${e.message}`, 'error');
+              }
+            }
+          }, 3000);
         } catch (e) {
           this.log(`ERROR sending to ${name}: ${e.message}`, 'error');
         }
@@ -574,9 +658,10 @@ export class NetworkManager {
   broadcastState(state) {
     if (!this.isHost) return;
 
+    // Strip card decks to reduce payload size - clients don't need them
     this.broadcast({
       type: 'state-update',
-      state: JSON.parse(JSON.stringify(state)) // Deep clone to avoid reference issues
+      state: this.stripCardDecks(state)
     });
   }
 
@@ -602,6 +687,12 @@ export class NetworkManager {
 
   destroy() {
     this.log('Destroying network manager');
+
+    // Clear keep-alive interval
+    if (this._keepAliveInterval) {
+      clearInterval(this._keepAliveInterval);
+      this._keepAliveInterval = null;
+    }
 
     // Close all connections
     for (const [, conn] of this.connections) {
