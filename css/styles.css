@@ -938,9 +938,8 @@ body {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  flex-shrink: 0;
-  max-height: 40%;
-  border-bottom: 1px solid var(--border);
+  flex: 1;
+  min-height: 200px;
 }
 
 .action-content {

@@ -71,7 +71,19 @@ Countries produce: oil 🛢️, tech 💻, agriculture 🌾, tourism ✈️
 
 ## Recent Changes (Latest First)
 
-### v0.5 - UI Overhaul & Multiplayer Fixes (Current)
+### v0.6 - Multiplayer Debugging (Current)
+- **Extensive debugging for multiplayer**:
+  - Added detailed console logging throughout network.js and ui.js
+  - Logs show connection state, player joins, and game-start message flow
+  - Host shows "Start Game (Host)" button, clients show "Waiting for host" message
+  - Connection status logged when players join (conn.open state)
+- **Debug output locations**:
+  - `[HOST]` prefixed logs in green for host actions
+  - `[CLIENT]` prefixed logs in green for client actions
+  - `[UI-HOST]` and `[UI-CLIENT]` logs in UI callbacks
+  - Error logs in red for failures
+
+### v0.5 - UI Overhaul & Multiplayer Fixes
 - **Multiplayer improvements**:
   - Only host can start the game (removed start button for clients)
   - Fixed board sync breaking after 2 turns (improved state merging)

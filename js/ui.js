@@ -211,9 +211,12 @@ function renderLobby() {
                   </div>
                   ${lobbyIsHost ? `
                     <button class="btn btn-primary btn-lg start-online-btn" ${lobbyPlayers.length < 2 ? 'disabled' : ''}>
-                      🚀 Start Game
+                      🚀 Start Game (Host)
                     </button>
-                  ` : '<p class="waiting-text">Waiting for host to start...</p>'}
+                  ` : `
+                    <p class="waiting-text">Waiting for host to start...</p>
+                    <p class="waiting-text" style="font-size:11px;opacity:0.6;">You are a client, not the host</p>
+                  `}
                 </div>
               ` : ''}
 
@@ -316,12 +319,21 @@ function attachLobbyEvents() {
 
   // Start online game - ONLY host can start
   const startOnlineBtn = document.querySelector('.start-online-btn');
-  if (startOnlineBtn && lobbyIsHost) {
-    startOnlineBtn.addEventListener('click', () => {
-      if (network && lobbyIsHost && lobbyPlayers.length >= 2) {
-        network.startGame();
-      }
-    });
+  if (startOnlineBtn) {
+    if (lobbyIsHost) {
+      startOnlineBtn.addEventListener('click', () => {
+        console.log('[UI] Start button clicked, lobbyIsHost:', lobbyIsHost, 'players:', lobbyPlayers.length);
+        if (network && lobbyIsHost && lobbyPlayers.length >= 2) {
+          console.log('[UI] Calling network.startGame()');
+          network.startGame();
+        } else {
+          console.log('[UI] Cannot start - network:', !!network, 'isHost:', lobbyIsHost, 'players:', lobbyPlayers.length);
+        }
+      });
+    } else {
+      // Non-host should not have this button, but if they do, remove it
+      startOnlineBtn.remove();
+    }
   }
 
   // Initialize player list if empty
@@ -350,22 +362,30 @@ function hostOnlineGame(name) {
   lobbyPlayerName = name;
   lobbyIsHost = true;
   lobbyPlayers = [name];
+  console.log('[UI] hostOnlineGame called, lobbyIsHost set to:', lobbyIsHost);
 
   network.host(name, (event, data) => {
+    console.log(`[UI-HOST] Received event: ${event}`, data);
+
     switch (event) {
       case 'room-created':
+        console.log('[UI-HOST] Room created with code:', data.code);
         lobbyRoomCode = data.code;
         render();
         break;
       case 'player-joined':
+        console.log('[UI-HOST] Player joined, players now:', data.players);
         lobbyPlayers = data.players;
         render();
         break;
       case 'player-left':
+        console.log('[UI-HOST] Player left, players now:', data.players);
         lobbyPlayers = data.players;
         render();
         break;
       case 'game-start':
+        console.log('[UI-HOST] === GAME START ===');
+        console.log('[UI-HOST] Local player ID:', data.localId);
         engine = new GameEngine(data.state);
         localPlayerId = data.localId;
         // Host: broadcast state to all clients whenever state changes
@@ -377,6 +397,7 @@ function hostOnlineGame(name) {
         });
         engine.onAnimation((type, d) => handleAnimation(type, d));
         appScreen = 'game';
+        console.log('[UI-HOST] Switching to game screen');
         render();
         break;
       case 'state-update':
@@ -410,25 +431,34 @@ function joinOnlineGame(name, code) {
   network = new NetworkManager();
   lobbyPlayerName = name;
   lobbyIsHost = false;
+  console.log('[UI] joinOnlineGame called, lobbyIsHost set to:', lobbyIsHost);
 
   network.join(name, code, (event, data) => {
+    console.log(`[UI-CLIENT] Received event: ${event}`, data);
+
     switch (event) {
       case 'joined':
+        console.log('[UI-CLIENT] Successfully joined room');
         lobbyRoomCode = code;
         lobbyPlayers = data.players;
         render();
         break;
       case 'player-joined':
       case 'player-left':
+        console.log('[UI-CLIENT] Player list updated');
         lobbyPlayers = data.players;
         render();
         break;
       case 'game-start':
+        console.log('[UI-CLIENT] === GAME START RECEIVED ===');
+        console.log('[UI-CLIENT] Local player ID:', data.localId);
+        console.log('[UI-CLIENT] Player index:', data.playerIndex);
         engine = new GameEngine(data.state);
         localPlayerId = data.localId;
         engine.on(() => render());
         engine.onAnimation((type, d) => handleAnimation(type, d));
         appScreen = 'game';
+        console.log('[UI-CLIENT] Switching to game screen');
         render();
         break;
       case 'state-update':

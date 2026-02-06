@@ -338,6 +338,8 @@ export class NetworkManager {
     this.connections.set(data.name, conn);
 
     this.log(`Player joined: ${data.name} (${this.players.length} players total)`);
+    this.log(`Connection stored for: ${data.name}, conn.open: ${conn.open}`);
+    this.log(`Total connections in map: ${this.connections.size}`);
 
     // Send confirmation to joining player
     conn.send({
@@ -359,20 +361,25 @@ export class NetworkManager {
 
   // Client message handling
   handleClientMessage(data) {
-    this.log(`Received: ${data.type}`);
+    this.log(`=== CLIENT received message: ${data.type} ===`);
 
     switch (data.type) {
       case 'joined':
+        this.log(`Joined room with players: ${data.players.join(', ')}`);
         this.callback('joined', { players: data.players });
         break;
 
       case 'player-joined':
       case 'player-left':
+        this.log(`Player list updated: ${data.players.join(', ')}`);
         this.callback(data.type, { players: data.players });
         break;
 
       case 'game-start':
-        this.log(`Game starting! Local player ID: ${data.localId}`);
+        this.log(`=== GAME STARTING ===`);
+        this.log(`Local player ID: ${data.localId}`);
+        this.log(`Player index: ${data.playerIndex}`);
+        this.log(`State has ${data.state?.players?.length || 0} players`);
         this.localPlayerId = data.localId;
         this.callback('game-start', data);
         break;
@@ -473,32 +480,50 @@ export class NetworkManager {
   }
 
   startGame() {
+    this.log('=== startGame() called ===');
+    this.log(`isHost: ${this.isHost}`);
+    this.log(`players array: ${JSON.stringify(this.players.map(p => p.name))}`);
+
     if (!this.isHost) {
-      this.log('Only host can start the game', 'error');
+      this.log('ERROR: Only host can start the game', 'error');
       return;
     }
 
     if (this.players.length < 2) {
-      this.log('Need at least 2 players to start', 'error');
+      this.log('ERROR: Need at least 2 players to start', 'error');
       this.callback('error', { message: 'Need at least 2 players to start the game' });
       return;
     }
 
     this.log(`Starting game with ${this.players.length} players...`);
-    this.log(`Connections available: ${Array.from(this.connections.keys()).join(', ')}`);
+    this.log(`Connections map size: ${this.connections.size}`);
+    this.log(`Connections in map: [${Array.from(this.connections.keys()).join(', ')}]`);
+
+    // Debug: log each connection's state
+    for (const [name, conn] of this.connections) {
+      this.log(`  - Connection "${name}": open=${conn.open}, peer=${conn.peer}`);
+    }
 
     // Import and create game state
     import('./gameEngine.js').then(({ createGameState }) => {
+      this.log('GameEngine imported successfully');
+
       const playerNames = this.players.map(p => p.name);
+      this.log(`Creating game state for players: ${playerNames.join(', ')}`);
+
       const state = createGameState(playerNames);
+      this.log('Game state created');
 
       // Assign player IDs
       this.players.forEach((playerInfo, i) => {
         playerInfo.playerId = state.players[i].id;
+        this.log(`Assigned player ID ${playerInfo.playerId} to ${playerInfo.name}`);
       });
 
-      // First, start game for host
+      // First, start game for host (player 0)
       this.localPlayerId = this.players[0].playerId;
+      this.log(`Starting game for HOST: ${this.players[0].name} (ID: ${this.localPlayerId})`);
+
       this.callback('game-start', {
         type: 'game-start',
         state: JSON.parse(JSON.stringify(state)),
@@ -506,37 +531,42 @@ export class NetworkManager {
         playerIndex: 0
       });
 
-      // Then broadcast to ALL connections (not by player name lookup)
+      // Then send to ALL clients
       const gameStateForClients = JSON.parse(JSON.stringify(state));
+
+      this.log(`Sending game-start to ${this.connections.size} client(s)...`);
 
       for (const [name, conn] of this.connections) {
         // Find the player info for this connection
         const playerInfo = this.players.find(p => p.name === name);
-        if (playerInfo && conn) {
-          const gameStartData = {
-            type: 'game-start',
-            state: gameStateForClients,
-            localId: playerInfo.playerId,
-            playerIndex: this.players.indexOf(playerInfo)
-          };
 
-          try {
-            if (conn.open) {
-              this.log(`Sending game-start to ${name} (connection open)`);
-              conn.send(gameStartData);
-            } else {
-              this.log(`Connection to ${name} not open, trying anyway...`, 'warn');
-              conn.send(gameStartData);
-            }
-          } catch (e) {
-            this.log(`Error sending to ${name}: ${e.message}`, 'error');
-          }
+        if (!playerInfo) {
+          this.log(`WARNING: No player info found for connection "${name}"`, 'warn');
+          continue;
+        }
+
+        const playerIndex = this.players.indexOf(playerInfo);
+
+        const gameStartData = {
+          type: 'game-start',
+          state: gameStateForClients,
+          localId: playerInfo.playerId,
+          playerIndex: playerIndex
+        };
+
+        try {
+          this.log(`Sending game-start to "${name}" (index: ${playerIndex}, ID: ${playerInfo.playerId}, conn.open: ${conn.open})`);
+          conn.send(gameStartData);
+          this.log(`SUCCESS: game-start sent to ${name}`);
+        } catch (e) {
+          this.log(`ERROR sending to ${name}: ${e.message}`, 'error');
         }
       }
 
-      this.log('Game started successfully!');
+      this.log('=== Game start complete ===');
     }).catch(err => {
-      this.log(`Failed to start game: ${err.message}`, 'error');
+      this.log(`FATAL: Failed to start game: ${err.message}`, 'error');
+      console.error(err);
       this.callback('error', { message: 'Failed to initialize game. Please try again.' });
     });
   }
