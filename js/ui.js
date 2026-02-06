@@ -122,7 +122,49 @@ function render() {
 // LOBBY SCREEN
 // ============================================================
 
+// Separate function to render room code display - makes host/client logic clearer
+function renderRoomCodeDisplay() {
+  console.log('[RENDER] renderRoomCodeDisplay - lobbyIsHost:', lobbyIsHost);
+
+  const playerChips = lobbyPlayers.map((p, i) => `
+    <div class="lobby-player-chip" style="border-color:${PLAYER_COLORS[i]}">
+      ${PLAYER_AVATARS[i]} ${p}
+    </div>
+  `).join('');
+
+  // CRITICAL: Only host gets the start button
+  let actionArea = '';
+  if (lobbyIsHost === true) {
+    console.log('[RENDER] Rendering HOST start button');
+    actionArea = `
+      <button class="btn btn-primary btn-lg start-online-btn" ${lobbyPlayers.length < 2 ? 'disabled' : ''}>
+        🚀 Start Game
+      </button>
+    `;
+  } else {
+    console.log('[RENDER] Rendering CLIENT waiting message');
+    actionArea = `
+      <p class="waiting-text">⏳ Waiting for host to start the game...</p>
+    `;
+  }
+
+  return `
+    <div class="room-code-display">
+      <p>Room Code:</p>
+      <div class="room-code">${lobbyRoomCode}</div>
+      <p class="waiting-text">Players in lobby: ${lobbyPlayers.length}/${MAX_PLAYERS}</p>
+      <div class="lobby-players-list">
+        ${playerChips}
+      </div>
+      ${actionArea}
+    </div>
+  `;
+}
+
 function renderLobby() {
+  // Debug: log lobby state
+  console.log('[RENDER] renderLobby called - lobbyIsHost:', lobbyIsHost, 'lobbyRoomCode:', lobbyRoomCode);
+
   return `
     <div class="lobby-screen">
       <div class="lobby-bg"></div>
@@ -197,28 +239,7 @@ function renderLobby() {
                 </button>
               </div>
 
-              ${lobbyRoomCode ? `
-                <div class="room-code-display">
-                  <p>Room Code:</p>
-                  <div class="room-code">${lobbyRoomCode}</div>
-                  <p class="waiting-text">Waiting for players... (${lobbyPlayers.length}/${MAX_PLAYERS})</p>
-                  <div class="lobby-players-list">
-                    ${lobbyPlayers.map((p, i) => `
-                      <div class="lobby-player-chip" style="border-color:${PLAYER_COLORS[i]}">
-                        ${PLAYER_AVATARS[i]} ${p}
-                      </div>
-                    `).join('')}
-                  </div>
-                  ${lobbyIsHost ? `
-                    <button class="btn btn-primary btn-lg start-online-btn" ${lobbyPlayers.length < 2 ? 'disabled' : ''}>
-                      🚀 Start Game (Host)
-                    </button>
-                  ` : `
-                    <p class="waiting-text">Waiting for host to start...</p>
-                    <p class="waiting-text" style="font-size:11px;opacity:0.6;">You are a client, not the host</p>
-                  `}
-                </div>
-              ` : ''}
+              ${lobbyRoomCode ? renderRoomCodeDisplay() : ''}
 
               ${lobbyError ? `<div class="lobby-error">${lobbyError}</div>` : ''}
             </div>
@@ -317,23 +338,29 @@ function attachLobbyEvents() {
     });
   }
 
-  // Start online game - ONLY host can start
+  // Start online game - button only exists for host (rendered conditionally)
   const startOnlineBtn = document.querySelector('.start-online-btn');
-  if (startOnlineBtn) {
-    if (lobbyIsHost) {
-      startOnlineBtn.addEventListener('click', () => {
-        console.log('[UI] Start button clicked, lobbyIsHost:', lobbyIsHost, 'players:', lobbyPlayers.length);
-        if (network && lobbyIsHost && lobbyPlayers.length >= 2) {
-          console.log('[UI] Calling network.startGame()');
-          network.startGame();
-        } else {
-          console.log('[UI] Cannot start - network:', !!network, 'isHost:', lobbyIsHost, 'players:', lobbyPlayers.length);
-        }
-      });
-    } else {
-      // Non-host should not have this button, but if they do, remove it
-      startOnlineBtn.remove();
-    }
+  if (startOnlineBtn && lobbyIsHost) {
+    console.log('[UI] Attaching click handler to Start button (host only)');
+    startOnlineBtn.addEventListener('click', () => {
+      console.log('[UI] Start button clicked!');
+      console.log('[UI] lobbyIsHost:', lobbyIsHost);
+      console.log('[UI] lobbyPlayers.length:', lobbyPlayers.length);
+      console.log('[UI] network exists:', !!network);
+
+      if (network && lobbyPlayers.length >= 2) {
+        console.log('[UI] All conditions met, calling network.startGame()');
+        network.startGame();
+      } else {
+        console.log('[UI] Cannot start - conditions not met');
+        if (!network) console.log('[UI] - No network');
+        if (lobbyPlayers.length < 2) console.log('[UI] - Not enough players');
+      }
+    });
+  } else if (startOnlineBtn && !lobbyIsHost) {
+    // This should never happen now, but just in case
+    console.error('[UI] ERROR: Start button exists but lobbyIsHost is false! Removing button.');
+    startOnlineBtn.remove();
   }
 
   // Initialize player list if empty
