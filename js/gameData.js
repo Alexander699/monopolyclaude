@@ -186,7 +186,21 @@ export const PLAYER_COLORS = [
   '#9B59B6', '#1ABC9C', '#E67E22', '#34495E'
 ];
 
-export const PLAYER_AVATARS = ['🧳', '📋', '🎩', '👔', '🗂️', '💼', '📊', '🏆'];
+// --- Player Avatars ---
+// To use custom icons: replace the `img` URL with a path to your own image.
+// Images should be square (e.g. 64x64 or 128x128). Supported formats: png, jpg, svg, webp.
+// Example: img: 'assets/avatars/my-custom-icon.png'
+// The `emoji` field is used as a fallback if the image fails to load.
+export const PLAYER_AVATARS = [
+  { emoji: '🧳', img: 'https://www.vg.no/vgc/spesial/2026/berikelser-jn/assets/gfx/epstein/epstein.png' },
+  { emoji: '📋', img: 'https://shapes.inc/api/public/avatar/bibinetanyahu'},
+  { emoji: '🎩', img: 'https://cafebazaar.ir/app/com.narendramodiapp?l=en'},
+  { emoji: '👔', img: 'https://api.dicebear.com/9.x/bottts-neutral/svg?seed=player4' },
+  { emoji: '🗂️', img: 'https://api.dicebear.com/9.x/bottts-neutral/svg?seed=player5' },
+  { emoji: '💼', img: 'https://api.dicebear.com/9.x/bottts-neutral/svg?seed=player6' },
+  { emoji: '📊', img: 'https://api.dicebear.com/9.x/bottts-neutral/svg?seed=player7' },
+  { emoji: '🏆', img: 'https://api.dicebear.com/9.x/bottts-neutral/svg?seed=player8' },
+];
 
 export const STARTING_MONEY = 15000;
 export const GO_SALARY = 2000;

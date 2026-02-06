@@ -449,12 +449,7 @@ export class GameEngine {
   payBail(player) {
     if (!player.inSanctions) return false;
 
-    if (player.hasGetOutFree) {
-      player.hasGetOutFree = false;
-      player.inSanctions = false;
-      player.sanctionsTurns = 0;
-      this.log(`${player.name} uses Diplomatic Immunity card to escape Sanctions!`, 'success');
-    } else if (player.money >= SANCTIONS_BAIL) {
+    if (player.money >= SANCTIONS_BAIL) {
       this.adjustMoney(player, -SANCTIONS_BAIL);
       player.inSanctions = false;
       player.sanctionsTurns = 0;
@@ -462,6 +457,25 @@ export class GameEngine {
     } else {
       return false;
     }
+    this.emit();
+    return true;
+  }
+
+  useImmunityCard(player) {
+    if (!player.inSanctions) return false;
+    if (!player.hasGetOutFree) return false;
+
+    player.hasGetOutFree = false;
+    player.inSanctions = false;
+    player.sanctionsTurns = 0;
+    this.log(`${player.name} uses Diplomatic Immunity card to escape Sanctions!`, 'success');
+
+    // Return the card to the diplomatic discard pile
+    const immunityCard = DIPLOMATIC_CABLE_CARDS.find(c => c.effect === 'get_out_free');
+    if (immunityCard) {
+      this.state.diplomaticDiscard.push(immunityCard);
+    }
+
     this.emit();
     return true;
   }
@@ -489,13 +503,21 @@ export class GameEngine {
     this.log(`${player.name} draws: ${card.title} - ${card.text}`);
     this.emitAnimation('card', { card, deckType });
 
+    // Track position before card effect to detect movement cards
+    const positionBefore = player.position;
     this.applyCardEffect(player, card);
+    const playerMoved = player.position !== positionBefore;
 
     if (!card.keepable) {
       discard.push(card);
     }
     this.state.currentCard = null;
-    this.state.phase = 'end-turn';
+
+    // If the card moved the player, handleLanding already set the correct phase
+    // (e.g. 'action' if they landed on an unowned property). Don't overwrite it.
+    if (!playerMoved) {
+      this.state.phase = 'end-turn';
+    }
   }
 
   applyCardEffect(player, card) {
@@ -748,6 +770,31 @@ export class GameEngine {
     const tierName = DEVELOPMENT_TIERS[space.developmentLevel].name;
     this.log(`${player.name} develops ${space.name} to ${tierName} ($${cost})!`, 'development');
     this.emitAnimation('develop', { spaceId, level: space.developmentLevel });
+    this.emit();
+    return true;
+  }
+
+  freeUpgradeProperty(playerId, spaceId) {
+    if (this.state.pendingFreeUpgrade !== playerId) return false;
+
+    const player = this.getPlayerById(playerId);
+    const space = this.getSpace(spaceId);
+
+    if (space.type !== 'country' || space.owner !== playerId) return false;
+    if (!this.hasCompleteAlliance(playerId, space.alliance)) return false;
+
+    const cost = this.getDevelopmentCost(spaceId);
+    if (cost === Infinity) return false;
+
+    // Free upgrade - no charge
+    space.developmentLevel++;
+    player.developmentCount++;
+    player.influence += 5 * space.developmentLevel;
+
+    const tierName = DEVELOPMENT_TIERS[space.developmentLevel].name;
+    this.log(`${player.name} freely develops ${space.name} to ${tierName}!`, 'development');
+    this.emitAnimation('develop', { spaceId, level: space.developmentLevel });
+    this.state.pendingFreeUpgrade = null;
     this.emit();
     return true;
   }

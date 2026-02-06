@@ -8,6 +8,19 @@ import { GameEngine, createGameState } from './gameEngine.js';
 import { SoundManager } from './soundManager.js';
 import { NetworkManager } from './network.js';
 
+// Render a player avatar as an image with emoji fallback
+function getAvatarHtml(avatar, size = 32) {
+  if (!avatar) return '';
+  // Support both old string format and new {emoji, img} format
+  if (typeof avatar === 'string') return `<span style="font-size:${size * 0.7}px">${avatar}</span>`;
+  const imgUrl = avatar.img || '';
+  const emoji = avatar.emoji || '🎮';
+  if (imgUrl) {
+    return `<img src="${imgUrl}" alt="" style="width:${size}px;height:${size}px;border-radius:50%;object-fit:cover;" onerror="this.outerHTML='<span style=font-size:${size * 0.7}px>${emoji}</span>'">`;
+  }
+  return `<span style="font-size:${size * 0.7}px">${emoji}</span>`;
+}
+
 // ---- App State ----
 let engine = null;
 let sound = new SoundManager();
@@ -20,8 +33,16 @@ let showPropertyPanel = false;
 let showTradePanel = false;
 let showLogPanel = false;
 let showChatPanel = false;
-let chatMessages = [];
+let chatMessages = JSON.parse(localStorage.getItem('gew_chatHistory') || '[]');
 let chatInput = '';
+let chatInputDraft = '';
+
+function addChatMessage(msg) {
+  chatMessages.push(msg);
+  // Keep max 200 messages in history
+  if (chatMessages.length > 200) chatMessages = chatMessages.slice(-200);
+  try { localStorage.setItem('gew_chatHistory', JSON.stringify(chatMessages)); } catch(e) {}
+}
 let animatingDice = false;
 let diceAnimationInProgress = false; // Moved here for proper scoping
 let diceValues = [1, 1];
@@ -92,6 +113,16 @@ function render() {
   const app = document.getElementById('app');
   if (!app) return;
 
+  // CRITICAL: If movement animation is in progress, defer render so the
+  // floating token is not destroyed by innerHTML replacement.
+  if (movementAnimationInProgress) {
+    return;
+  }
+
+  // Preserve chat input draft before re-render
+  const chatEl = document.getElementById('chat-input-mini');
+  if (chatEl) chatInputDraft = chatEl.value;
+
   // Safety check: if we're not in an active animation, ensure animation flags are cleared
   if (!diceAnimationInProgress) {
     animatingDice = false;
@@ -116,6 +147,15 @@ function render() {
       attachGameOverEvents();
       break;
   }
+
+  // Post-render: auto-scroll chat and restore cursor focus
+  const chatMsgs = document.getElementById('chat-messages-mini');
+  if (chatMsgs) chatMsgs.scrollTop = chatMsgs.scrollHeight;
+  const chatInput2 = document.getElementById('chat-input-mini');
+  if (chatInput2 && chatInputDraft) {
+    // Move cursor to end of input
+    chatInput2.setSelectionRange(chatInputDraft.length, chatInputDraft.length);
+  }
 }
 
 // ============================================================
@@ -130,7 +170,7 @@ function renderRoomCodeDisplay() {
 
   const playerChips = lobbyPlayers.map((p, i) => `
     <div class="lobby-player-chip" style="border-color:${PLAYER_COLORS[i]}">
-      ${PLAYER_AVATARS[i]} ${p}
+      ${getAvatarHtml(PLAYER_AVATARS[i], 24)} ${p}
     </div>
   `).join('');
 
@@ -201,7 +241,7 @@ function renderLobby() {
                 ${(lobbyPlayers.length === 0 ? Array(2).fill('') : lobbyPlayers).map((name, i) => `
                   <div class="player-name-row">
                     <span class="player-color-dot" style="background:${PLAYER_COLORS[i]}"></span>
-                    <span class="player-avatar-pick">${PLAYER_AVATARS[i]}</span>
+                    <span class="player-avatar-pick">${getAvatarHtml(PLAYER_AVATARS[i], 28)}</span>
                     <input type="text" class="player-name-input" data-index="${i}"
                            value="${name}" placeholder="Player ${i + 1}" maxlength="16" />
                   </div>
@@ -441,7 +481,7 @@ function hostOnlineGame(name) {
         handleRemoteAction(data);
         break;
       case 'chat':
-        chatMessages.push(data);
+        addChatMessage(data);
         render();
         break;
       case 'error':
@@ -510,7 +550,7 @@ function joinOnlineGame(name, code) {
         }
         break;
       case 'chat':
-        chatMessages.push(data);
+        addChatMessage(data);
         render();
         break;
       case 'error':
@@ -541,7 +581,7 @@ function renderGame() {
         </div>
         <div class="top-bar-center">
           <div class="current-player-indicator" style="border-color:${currentPlayer.color}">
-            <span>${currentPlayer.avatar} ${currentPlayer.name}'s Turn</span>
+            <span>${getAvatarHtml(currentPlayer.avatar, 24)} ${currentPlayer.name}'s Turn</span>
             ${currentPlayer.inSanctions ? '<span class="sanctions-badge">⛔ Sanctioned</span>' : ''}
           </div>
         </div>
@@ -576,7 +616,7 @@ function renderGame() {
           <div class="chat-panel-inline">
             <h4>💬 Chat</h4>
             <div class="chat-messages-mini" id="chat-messages-mini">
-              ${chatMessages.slice(-10).map(msg => `
+              ${chatMessages.map(msg => `
                 <div class="chat-msg">
                   <span class="chat-name" style="color:${msg.color || '#fff'}">${msg.name}:</span>
                   <span class="chat-text">${msg.text}</span>
@@ -584,7 +624,8 @@ function renderGame() {
               `).join('') || '<div class="no-messages">No messages yet</div>'}
             </div>
             <div class="chat-input-mini">
-              <input type="text" id="chat-input-mini" placeholder="Type a message..." maxlength="200" />
+              <input type="text" id="chat-input-mini" placeholder="Type a message..." maxlength="200"
+                     value="${(chatInputDraft || '').replace(/"/g, '&quot;')}" />
               <button class="btn btn-sm btn-primary" id="btn-send-chat-mini">Send</button>
             </div>
           </div>
@@ -609,7 +650,7 @@ function renderPlayerCard(player, isCurrent) {
     <div class="player-card ${isCurrent ? 'current' : ''} ${player.bankrupt ? 'bankrupt' : ''}"
          style="border-left: 4px solid ${player.color}">
       <div class="player-card-header">
-        <span class="player-avatar-small" style="background:${player.color}">${player.avatar}</span>
+        <span class="player-avatar-small" style="background:${player.color}">${getAvatarHtml(player.avatar, 28)}</span>
         <div class="player-card-name">
           <span class="player-name">${player.name}</span>
           ${player.bankrupt ? '<span class="bankrupt-label">BANKRUPT</span>' : ''}
@@ -742,7 +783,7 @@ function renderBoard() {
     if (playersHere.length > 0) {
       html += `<div class="player-tokens">`;
       playersHere.forEach(p => {
-        html += `<div class="player-token" data-player="${p.id}" style="background:${p.color}" title="${p.name}">${p.avatar}</div>`;
+        html += `<div class="player-token" data-player="${p.id}" style="background:${p.color}" title="${p.name}">${getAvatarHtml(p.avatar, 26)}</div>`;
       });
       html += `</div>`;
     }
@@ -881,13 +922,38 @@ function renderActionPanel(currentPlayer, isMyTurn) {
 
   html += '</div>';
 
-  // Management buttons (always available on your turn)
-  if (isMyTurn && currentPlayer.properties.length > 0) {
+  // Free upgrade notification
+  {
+    const upgradePlayerId = localPlayerId || currentPlayer.id;
+    if (state.pendingFreeUpgrade === upgradePlayerId) {
+      html += `
+        <div style="background: rgba(34,197,94,0.15); border: 1px solid var(--success); border-radius: var(--radius-sm); padding: 10px; text-align: center;">
+          <div style="font-size: 20px; margin-bottom: 4px;">🎁</div>
+          <div style="font-weight: 700; color: var(--success); font-size: 13px;">Free Development Upgrade Available!</div>
+          <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">Open Properties to choose which country to upgrade for free.</div>
+        </div>
+      `;
+    }
+  }
+
+  // Management buttons
+  {
+    // Count pending trade offers for this player
+    const myId = localPlayerId || currentPlayer.id;
+    const pendingForMe = state.tradeOffers
+      ? state.tradeOffers.filter(t => t.status === 'pending' && t.toId === myId).length
+      : 0;
+    const tradeBadge = pendingForMe > 0
+      ? `<span class="trade-badge">${pendingForMe}</span>`
+      : '';
+    const tradeGlow = pendingForMe > 0 ? 'trade-notify' : '';
+
     html += `
       <div class="management-section">
         <h4>Management</h4>
-        <button class="btn btn-sm btn-info" id="btn-properties">🏢 Properties</button>
-        <button class="btn btn-sm btn-warning" id="btn-trade">🤝 Trade</button>
+        ${currentPlayer.properties.length > 0 ?
+          '<button class="btn btn-sm btn-info" id="btn-properties">🏢 Properties</button>' : ''}
+        <button class="btn btn-sm btn-warning ${tradeGlow}" id="btn-trade">🤝 Trade ${tradeBadge}</button>
       </div>
     `;
   }
@@ -910,13 +976,7 @@ function renderActionPanel(currentPlayer, isMyTurn) {
     `;
   }
 
-  // Always available
-  html += `
-    <div class="quick-actions">
-      <button class="btn btn-sm btn-outline" id="btn-trade-open">🤝 Propose Trade</button>
-      <button class="btn btn-sm btn-outline" id="btn-props-open">📊 View Properties</button>
-    </div>
-  `;
+  // (Properties and Trade buttons are already in the Management section above)
 
   // Mini log (last 5 entries)
   const recentLogs = state.log.slice(-5).reverse();
@@ -956,12 +1016,15 @@ function renderPropertyPanel() {
   `;
 
   // My properties
+  const hasFreeUpgrade = state.pendingFreeUpgrade === currentPlayer.id;
   currentPlayer.properties.forEach(pid => {
     const space = engine.getSpace(pid);
     const alliance = ALLIANCES[space.alliance];
     const devCost = engine.getDevelopmentCost(pid);
     const canDevelop = devCost !== Infinity && currentPlayer.money >= devCost &&
                        engine.hasCompleteAlliance(currentPlayer.id, space.alliance);
+    const canFreeUpgrade = hasFreeUpgrade && space.type === 'country' && devCost !== Infinity &&
+                           engine.hasCompleteAlliance(currentPlayer.id, space.alliance);
 
     html += `
       <div class="property-item" style="border-left:4px solid ${alliance?.color || '#666'}">
@@ -974,6 +1037,11 @@ function renderPropertyPanel() {
           </div>
         </div>
         <div class="prop-actions">
+          ${canFreeUpgrade ? `
+            <button class="btn btn-xs btn-success" data-free-upgrade="${pid}" style="background: #16a34a; animation: tradeGlow 1.5s ease-in-out infinite;">
+              🎁 Free Upgrade
+            </button>
+          ` : ''}
           ${space.type === 'country' && canDevelop ? `
             <button class="btn btn-xs btn-success" data-develop="${pid}">
               ⬆️ Develop ($${devCost})
@@ -1029,7 +1097,7 @@ function renderTradePanel() {
               ${otherPlayers.map(p => `
                 <button class="partner-chip ${selectedTradePartner === p.id ? 'selected' : ''}"
                         data-partner="${p.id}" style="border-color:${p.color}">
-                  ${p.avatar} ${p.name}
+                  ${getAvatarHtml(p.avatar, 20)} ${p.name}
                 </button>
               `).join('')}
             </div>
@@ -1207,7 +1275,7 @@ function renderGameOverOverlay() {
         <div class="gameover-crown">👑</div>
         <h1 class="gameover-title">VICTORY!</h1>
         <div class="gameover-winner" style="color:${winner.color}">
-          <span class="winner-avatar">${winner.avatar}</span>
+          <span class="winner-avatar">${getAvatarHtml(winner.avatar, 48)}</span>
           <span class="winner-name">${winner.name}</span>
         </div>
         <div class="gameover-stats">
@@ -1223,7 +1291,7 @@ function renderGameOverOverlay() {
             .map((p, i) => `
               <div class="ranking-row">
                 <span class="rank">#${i + 1}</span>
-                <span class="rank-avatar" style="background:${p.color}">${p.avatar}</span>
+                <span class="rank-avatar" style="background:${p.color}">${getAvatarHtml(p.avatar, 28)}</span>
                 <span class="rank-name">${p.name}</span>
                 <span class="rank-wealth">$${engine.calculateTotalWealth(p).toLocaleString()}</span>
               </div>
@@ -1259,9 +1327,7 @@ function attachGameEvents() {
 
   // Property/Trade buttons
   document.getElementById('btn-properties')?.addEventListener('click', () => { showPropertyPanel = true; render(); });
-  document.getElementById('btn-props-open')?.addEventListener('click', () => { showPropertyPanel = true; render(); });
   document.getElementById('btn-trade')?.addEventListener('click', () => { showTradePanel = true; render(); });
-  document.getElementById('btn-trade-open')?.addEventListener('click', () => { showTradePanel = true; render(); });
 
   // Influence actions
   document.getElementById('btn-embargo')?.addEventListener('click', () => handleInfluenceAction('embargo'));
@@ -1295,6 +1361,18 @@ function attachGameEvents() {
         return;
       }
       engine.developProperty(engine.getCurrentPlayer().id, pid);
+      sound.playDevelop();
+    });
+  });
+  document.querySelectorAll('[data-free-upgrade]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const pid = parseInt(btn.dataset.freeUpgrade);
+      const playerId = localPlayerId || engine.getCurrentPlayer().id;
+      if (isOnlineClient()) {
+        network.sendAction({ actionType: 'free-upgrade', spaceId: pid });
+        return;
+      }
+      engine.freeUpgradeProperty(playerId, pid);
       sound.playDevelop();
     });
   });
@@ -1389,9 +1467,12 @@ function attachGameEvents() {
 
   // Chat - inline mini chat
   document.getElementById('btn-send-chat-mini')?.addEventListener('click', handleSendChatMini);
-  document.getElementById('chat-input-mini')?.addEventListener('keypress', (e) => {
+  const chatInputEl = document.getElementById('chat-input-mini');
+  chatInputEl?.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') handleSendChatMini();
   });
+  // Track draft so it survives re-renders
+  chatInputEl?.addEventListener('input', (e) => { chatInputDraft = e.target.value; });
 
   // Chat - modal chat (legacy)
   document.getElementById('btn-send-chat')?.addEventListener('click', handleSendChat);
@@ -1458,8 +1539,7 @@ function handleRemoteAction(data) {
       break;
     case 'use-immunity': {
       const p = engine.getCurrentPlayer();
-      p.hasGetOutFree = true;
-      engine.payBail(p);
+      engine.useImmunityCard(p);
       break;
     }
     case 'buy-property':
@@ -1491,6 +1571,9 @@ function handleRemoteAction(data) {
       break;
     case 'develop-property':
       engine.developProperty(engine.getCurrentPlayer().id, data.spaceId);
+      break;
+    case 'free-upgrade':
+      engine.freeUpgradeProperty(engine.getCurrentPlayer().id, data.spaceId);
       break;
     case 'mortgage-property':
       engine.mortgageProperty(engine.getCurrentPlayer().id, data.spaceId);
@@ -1639,8 +1722,7 @@ function handleUseImmunity() {
     return;
   }
   const player = engine.getCurrentPlayer();
-  player.hasGetOutFree = true;
-  engine.payBail(player);
+  engine.useImmunityCard(player);
   render();
 }
 
@@ -1760,9 +1842,10 @@ function sendChatMessage(input) {
     network.sendChat(msg);
   } else {
     // Local mode - add directly
-    chatMessages.push(msg);
+    addChatMessage(msg);
   }
   input.value = '';
+  chatInputDraft = '';
   render();
 }
 
@@ -1809,16 +1892,23 @@ function handleAnimation(type, data) {
     case 'payment':
       sound.playRentPaid();
       break;
-    case 'card':
+    case 'card': {
       sound.playCard();
-      currentCardDisplay = data.card;
-      showCardModal = true;
+      const isGlobalNews = data.deckType === 'globalNews';
       // Broadcast Global News cards to all players via server
-      if (network && network.isHost && data.deckType === 'globalNews') {
+      if (network && network.isHost && isGlobalNews) {
         network.broadcastGlobalNews(data.card);
       }
-      render();
+      // Show card modal: Global News always shown, Diplomatic Cables only for the local player
+      const currentTurnPlayer = engine?.getCurrentPlayer();
+      const isLocalPlayerCard = !localPlayerId || currentTurnPlayer?.id === localPlayerId;
+      if (isGlobalNews || isLocalPlayerCard) {
+        currentCardDisplay = data.card;
+        showCardModal = true;
+        render();
+      }
       break;
+    }
     case 'sanctions':
       sound.playSanctions();
       break;
@@ -1837,6 +1927,7 @@ function handleAnimation(type, data) {
 // ---- Movement Animation ----
 
 let movementAnimationInProgress = false;
+let pendingRenderAfterAnimation = false;
 
 function animatePlayerMovement(playerId, fromPos, toPos) {
   if (movementAnimationInProgress) return;
@@ -1855,44 +1946,76 @@ function animatePlayerMovement(playerId, fromPos, toPos) {
   if (path.length === 0) return;
 
   movementAnimationInProgress = true;
+  pendingRenderAfterAnimation = true;
 
-  // Create a floating token for animation
   const board = document.querySelector('.board');
   if (!board) {
     movementAnimationInProgress = false;
+    pendingRenderAfterAnimation = false;
     return;
   }
 
-  // Get positions of spaces for animation
+  // Create a floating token that will slide across the board
+  const floater = document.createElement('div');
+  floater.className = 'player-token-floater';
+  floater.innerHTML = getAvatarHtml(player.avatar, 30);
+  floater.style.cssText = `
+    position: absolute;
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    background: ${player.color};
+    border: 2px solid rgba(255,255,255,0.9);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+    z-index: 100;
+    pointer-events: none;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.6);
+    transition: left 0.12s ease-out, top 0.12s ease-out;
+  `;
+
+  board.style.position = 'relative';
+  board.appendChild(floater);
+
+  // Hide the real token during animation
+  const realTokens = document.querySelectorAll(`.player-token[data-player="${playerId}"]`);
+  realTokens.forEach(t => t.style.opacity = '0');
+
+  // Position floater at starting space
+  function positionAt(spaceIndex) {
+    const spaceEl = board.querySelector(`[data-space-id="${spaceIndex}"]`);
+    if (!spaceEl) return;
+    const boardRect = board.getBoundingClientRect();
+    const spaceRect = spaceEl.getBoundingClientRect();
+    floater.style.left = (spaceRect.left - boardRect.left + spaceRect.width / 2 - 15) + 'px';
+    floater.style.top = (spaceRect.top - boardRect.top + spaceRect.height / 2 - 15) + 'px';
+  }
+
+  positionAt(fromPos);
+  // Force initial position without transition
+  floater.style.transition = 'none';
+  floater.offsetHeight; // Force reflow
+  floater.style.transition = 'left 0.12s ease-out, top 0.12s ease-out';
+
   let stepIndex = 0;
+  const delay = path.length > 8 ? 60 : 120;
 
   function animateStep() {
     if (stepIndex >= path.length) {
+      // Animation complete - remove floater and do the deferred render
+      floater.remove();
       movementAnimationInProgress = false;
-      render(); // Final render to show player at destination
+      pendingRenderAfterAnimation = false;
+      render();
       return;
     }
 
-    const targetPos = path[stepIndex];
-    const targetSpace = document.querySelector(`[data-space-id="${targetPos}"]`);
-
-    if (targetSpace) {
-      // Find player token and add a pulse effect
-      const playerTokens = document.querySelectorAll(`.player-token[data-player="${playerId}"]`);
-      playerTokens.forEach(token => {
-        token.classList.add('moving');
-      });
-    }
-
+    positionAt(path[stepIndex]);
+    sound.playMove();
     stepIndex++;
-
-    // Speed up animation - 100ms per space, but cap at 8 steps shown
-    const delay = path.length > 8 ? 50 : 100;
     setTimeout(animateStep, delay);
   }
 
-  // Start animation
-  setTimeout(animateStep, 100);
+  setTimeout(animateStep, 80);
 }
 
 // ---- Helpers ----
