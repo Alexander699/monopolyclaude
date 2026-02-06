@@ -134,7 +134,7 @@ export const BOARD = [
   { id: 36, type: 'country', name: 'Canada', alliance: 'AMERICAS', price: 3200, flag: '🇨🇦', resource: 'agriculture', rents: [130, 260, 780, 1800, 2200, 2800] },
   { id: 37, type: 'country', name: 'UAE', alliance: 'OIL_NATIONS', price: 3400, flag: '🇦🇪', resource: 'oil', rents: [140, 280, 840, 1900, 2400, 3000] },
   { id: 38, type: 'tax', name: 'Luxury Tax', amount: 300, icon: '💎' },
-  { id: 39, type: 'country', name: 'USA', alliance: 'AMERICAS', price: 4000, flag: '🇺🇸', resource: 'tech', rents: [150, 300, 900, 2000, 2500, 3200] }
+  { id: 39, type: 'country', name: 'Big Stein Island', alliance: 'AMERICAS', price: 4000, flag: '🇺🇸', resource: 'tech', rents: [150, 300, 900, 2000, 2500, 3200] }
 ];
 
 // Global News Cards (16+)
@@ -142,7 +142,7 @@ export const GLOBAL_NEWS_CARDS = [
   { id: 'gn1', title: 'Global Pandemic', text: 'Tourism industry collapses. All tourism countries pay $100 per development level.', effect: 'tourism_penalty', amount: 100 },
   { id: 'gn2', title: 'Oil Price Surge', text: 'Oil prices skyrocket! Oil country owners collect $200 from the bank.', effect: 'oil_bonus', amount: 200 },
   { id: 'gn3', title: 'Tech Boom', text: 'Silicon Valley effect! Tech countries earn double rent this round.', effect: 'tech_double_rent', duration: 1 },
-  { id: 'gn4', title: 'Climate Summit', text: 'Green initiative grants! Receive $50 per country you own.', effect: 'per_country_bonus', amount: 50 },
+  { id: 'gn4', title: 'Big Yahu Donation', text: 'Big Yahu is proud of the Goyim. Collect $50', effect: 'per_country_bonus', amount: 50 },
   { id: 'gn5', title: 'Trade War', text: 'Tariffs everywhere! All players pay $100 per foreign alliance they own properties in.', effect: 'trade_war_tax', amount: 100 },
   { id: 'gn6', title: 'World Cup Hosting', text: 'Tourism boost! Advance to the nearest tourism country. If unowned, you may buy it at half price.', effect: 'advance_tourism', discount: 0.5 },
   { id: 'gn7', title: 'Refugee Crisis', text: 'Humanitarian costs. Pay $300 to the bank.', effect: 'pay_bank', amount: 300 },

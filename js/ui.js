@@ -717,7 +717,7 @@ function renderBoard() {
     // Ownership indicator
     if (space.owner) {
       const owner = engine.getPlayerById(space.owner);
-      html += `<div class="owner-indicator" style="background:${owner.color}"></div>`;
+      html += `<div class="owner-indicator" style="color:${owner.color}"></div>`;
     }
 
     // Development indicators
