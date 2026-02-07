@@ -88,6 +88,7 @@ let lobbyError = '';
 let selectedPropertyForDev = null;
 let selectedSpaceInfo = null; // Space ID for info modal (null = hidden)
 let selectedMapId = 'classic'; // Map selection (classic or expanded)
+let knownOwners = new Set(); // Track space IDs with known ownership (prevents animation replay)
 
 // ---- Board Layout Helpers ----
 // Board is NxN grid (11x11 for classic, 13x13 for expanded). Spaces go clockwise:
@@ -166,6 +167,10 @@ function render() {
   // Safety check: if we're not in an active animation, ensure animation flags are cleared
   if (!diceAnimationInProgress) {
     animatingDice = false;
+    // Sync dice display with engine state to prevent stale animation values
+    if (engine?.state?.lastDice) {
+      diceValues = [engine.state.lastDice.d1, engine.state.lastDice.d2];
+    }
     // Also remove rolling class from any existing dice display
     const existingDice = document.querySelector('.dice-display');
     if (existingDice && existingDice.classList.contains('rolling')) {
@@ -479,6 +484,7 @@ function startLocalGame(names) {
   engine.on(() => render());
   engine.onAnimation((type, data) => handleAnimation(type, data));
 
+  knownOwners = new Set();
   appScreen = 'game';
   sound.playClick();
   render();
@@ -530,6 +536,7 @@ function hostOnlineGame(name) {
           }
         });
         engine.onAnimation((type, d) => handleAnimation(type, d));
+        knownOwners = new Set();
         appScreen = 'game';
         console.log('[UI-HOST] Switching to game screen');
         render();
@@ -615,6 +622,7 @@ function joinOnlineGame(name, code) {
         localPlayerId = data.localId;
         engine.on(() => render());
         engine.onAnimation((type, d) => handleAnimation(type, d));
+        knownOwners = new Set();
         appScreen = 'game';
         console.log('[UI-CLIENT] Switching to game screen');
         render();
@@ -629,6 +637,10 @@ function joinOnlineGame(name, code) {
           }
           if (data.state.players) {
             engine.state.players = data.state.players;
+          }
+          // Sync dice display with authoritative state from host
+          if (engine.state.lastDice) {
+            diceValues = [engine.state.lastDice.d1, engine.state.lastDice.d2];
           }
           render();
         }
@@ -906,7 +918,9 @@ function renderBoard() {
     // Ownership indicator
     if (space.owner) {
       const owner = engine.getPlayerById(space.owner);
-      html += `<div class="owner-indicator" style="color:${owner.color}"></div>`;
+      const isNewOwner = !knownOwners.has(i);
+      html += `<div class="owner-indicator${isNewOwner ? ' owner-new' : ''}" style="color:${owner.color}"></div>`;
+      knownOwners.add(i);
     }
 
     // Development indicators
@@ -2184,6 +2198,7 @@ function handleLoadGame() {
     engine = new GameEngine(state);
     engine.on(() => render());
     engine.onAnimation((type, data) => handleAnimation(type, data));
+    knownOwners = new Set();
     appScreen = 'game';
     render();
     return true;

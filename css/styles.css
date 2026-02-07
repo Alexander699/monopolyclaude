@@ -985,7 +985,7 @@ body {
   font-weight: 600;
 }
 
-/* Owner indicator - corner triangle banner with pop-in animation */
+/* Owner indicator - corner triangle banner */
 .owner-indicator {
   position: absolute;
   bottom: 0;
@@ -997,6 +997,9 @@ body {
   border-color: transparent transparent currentColor transparent;
   filter: drop-shadow(-1px -1px 2px rgba(0,0,0,0.5));
   z-index: 2;
+}
+/* Only animate when newly purchased */
+.owner-indicator.owner-new {
   animation: ownerPopIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
 }
 

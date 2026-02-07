@@ -552,6 +552,7 @@ export class GameEngine {
 
       case 'go_sanctions':
         this.sendToSanctions(player);
+        this.state.phase = 'end-turn';
         break;
 
       case 'gain_influence':

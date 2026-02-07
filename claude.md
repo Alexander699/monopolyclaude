@@ -58,16 +58,21 @@ Host processes in GameEngine → Broadcasts state → Server relays to all Clien
 ### Socket.IO Events
 | Event | Direction | Purpose |
 |-------|-----------|---------|
-| `create-room` | Client→Server | Host creates a room |
+| `create-room` | Client→Server | Host creates a room (includes persistent `clientId`) |
 | `room-created` | Server→Client | Returns room code |
-| `join-room` | Client→Server | Client joins with code+name |
-| `joined` | Server→Client | Confirms join with player list |
+| `join-room` | Client→Server | Client joins/rejoins with code+name+`clientId` |
+| `joined` | Server→Client | Confirms join/rejoin with player list |
 | `player-joined/left` | Server→All | Player list updates |
 | `start-game` | Host→Server→Clients | Sends initial game state to each client |
 | `game-action` | Client→Server→Host | Client action relayed to host |
 | `state-update` | Host→Server→Clients | Host broadcasts state changes |
+| `animation` | Host→Server→Clients | Host relays movement animation events so clients animate tokens |
 | `global-news` | Host→Server→Clients | Global News card shown to all |
 | `chat` | Any→Server→Others | Chat messages |
+| `player-connection` | Server→Host | Notifies host when a client disconnects/reconnects |
+| `kick-player` | Host→Server | Host removes a player by `playerId` |
+| `player-kicked` | Server→Host | Confirms player kick to host |
+| `kicked` | Server→Client | Notifies kicked client and terminates session |
 | `error-msg` | Server→Client | Error notifications |
 
 ### Key Patterns in ui.js
@@ -224,7 +229,18 @@ Player avatars are defined in `js/gameData.js` in the `PLAYER_AVATARS` array. Ea
 
 ## Recent Changes (Latest First)
 
-### v1.4 - Map System, Center Controls & Space Info (Current)
+### v1.5 - Multiplayer Session Recovery, Moderation & Sync (Current)
+- **Trade initiator fix (host local send path):** `handleSendTrade()` now uses `localPlayerId` in online mode. This fixes incorrect trade headers like "Player 2 → Player 2" when another player initiates trade out-of-turn.
+- **Chat scoped per room:** chat history storage moved from a global key to room-specific keys (`gew_chatHistory_<ROOMCODE>`), preventing old-lobby chat bleed into unrelated games.
+- **Session cleanup hardening:** creating/joining/new-game now calls network cleanup before opening a new session path, avoiding stale socket listeners across matches.
+- **Persistent client identity:** `NetworkManager` now stores a stable `clientId` in localStorage and sends it on create/join.
+- **Rejoin after refresh (non-host):** server now tracks room members by `clientId` seat instead of `socket.id`, stores latest stripped state + player assignments, and lets the same browser/device rejoin an active game.
+- **Host moderation controls:** host UI now shows `Kick Player` for any non-host player (or `Kick Inactive` when disconnected).
+- **Kick flow:** server handles `kick-player`; kicked clients receive `kicked` and are disconnected. Host receives `player-kicked` and force-bankrupts the removed player to keep game progression valid.
+- **Connection state awareness:** host receives `player-connection` events (disconnect/reconnect) and player cards show an `OFFLINE` indicator.
+- **Movement animation sync fix:** added `animation` relay event; host broadcasts move animation payloads so clients animate token movement instead of teleporting.
+
+### v1.4 - Map System, Center Controls & Space Info
 - **Two map variants**: Classic (11x11, 40 spaces) and World Domination (13x13, 48 spaces) selectable in lobby
 - **Map selection UI**: Clickable cards in lobby showing map name, description, and grid size; highlighted selection with blue glow
 - **Map registry** (`MAPS` in gameData.js): Defines board data, grid size, total spaces, and corner positions per map
@@ -312,7 +328,8 @@ Player avatars are defined in `js/gameData.js` in the `PLAYER_AVATARS` array. Ea
 - Complete game implementation with all mechanics, local hot-seat multiplayer
 
 ## Known Issues & TODO
-- [ ] Reconnection handling (refresh disconnects — need session persistence + rejoin)
+- [ ] Host reconnection recovery (if host refreshes, room still closes; host remains authority process)
+- [x] Non-host reconnect after refresh (same browser/device via persistent `clientId`)
 - [ ] Turn timer option
 - [ ] Spectator mode
 - [ ] Mobile responsive improvements
@@ -354,7 +371,7 @@ Player avatars are defined in `js/gameData.js` in the `PLAYER_AVATARS` array. Ea
 
 ### ui.js (~2100 lines)
 - `getAvatarHtml(avatar, size)` - Renders player avatar as image with emoji fallback
-- `addChatMessage(msg)` - Adds chat message and persists to localStorage
+- `addChatMessage(msg)` - Adds chat message and persists to room-scoped localStorage key
 - `isOnlineClient()` - Returns true when playing online as non-host
 - `handleRemoteAction(data)` - Host dispatches remote client actions to engine
 - `initApp()` - Entry point, initializes state
@@ -374,6 +391,8 @@ Player avatars are defined in `js/gameData.js` in the `PLAYER_AVATARS` array. Ea
 - `animatePlayerMovement()` - Smooth floating token sliding between cells (wraps via `% state.totalSpaces`)
 - `getFlagHtml()` - Converts flag emoji to image for cross-platform display; now also falls back to `flagEmojiToCode()` for new countries not present in the static map
 - `hostOnlineGame()` / `joinOnlineGame()` - Network setup with callbacks
+- `handleHostPlayerConnection()` - Host-side disconnect/reconnect state handling
+- `handleKickPlayer()` / `handleHostPlayerKicked()` - Host moderation actions and post-kick game-state handling
 - `handleLoadGame()` - Loads saved game with backwards compatibility for pre-map saves
 - **State variables**: `selectedMapId` (lobby map choice), `selectedSpaceInfo` (space info modal)
 - Debug tools at bottom (window.enableDebug(), window.debug.*)
@@ -381,13 +400,16 @@ Player avatars are defined in `js/gameData.js` in the `PLAYER_AVATARS` array. Ea
 ### network.js (Socket.IO Client)
 - `NetworkManager` class with Socket.IO internals
 - `SERVER_URL` auto-detects localhost vs production
+- Persistent `clientId` in localStorage (`gew_client_id`) for session rejoin
 - `host(name, callback)` - Creates room via server
-- `join(name, code, callback)` - Joins room via server
-- `startGame(mapId)` - Host creates state with selected map, sends to server for relay to clients
+- `join(name, code, callback)` - Joins/rejoins room via server
+- `startGame(mapId)` - Host creates state with selected map and sends per-player assignments including `clientId`
 - `broadcastState(state)` - Host sends state to all clients (strips card decks)
 - `broadcastGlobalNews(card)` - Host sends Global News card to all clients
+- `broadcastAnimation(type, data)` - Host relays movement animations to clients
 - `sendAction(action)` - Client sends action to host via server
 - `sendChat(msg)` - Send chat message
+- `kickPlayer(playerId)` - Host moderation request to remove player
 - `stripCardDecks(state)` - Removes card deck arrays to reduce payload size
 - `destroy()` - Disconnect and cleanup
 
@@ -395,8 +417,11 @@ Player avatars are defined in `js/gameData.js` in the `PLAYER_AVATARS` array. Ea
 - Express + Socket.IO, listens on PORT env var or 3000
 - CORS: allows alexander699.github.io + localhost
 - Room management: create/join with 5-char codes, max 8 players
-- Message relay: game-action → host, state-update → all clients, global-news → all clients
-- Disconnect handling: host leaves = room closes, client leaves = player removed
+- Session seats keyed by persistent `clientId` (not socket ID) for non-host rejoin support
+- Stores latest stripped game state + `playerAssignments` so reconnecting clients can be re-synced
+- Message relay: game-action → host, state-update/global-news/animation → clients
+- Moderation relay: `kick-player`, `player-kicked`, `kicked`, `player-connection`
+- Disconnect handling: host leaves = room closes, client disconnect in active game = marked offline (rejoinable unless kicked)
 - Room cleanup: deletes rooms older than 2 hours every 5 minutes
 - Health check: `GET /` returns `{ status: 'ok', rooms: count }`
 
