@@ -140,7 +140,16 @@ Player avatars are defined in `js/gameData.js` in the `PLAYER_AVATARS` array. Ea
 
 ## Recent Changes (Latest First)
 
-### v1.2 - Board Maximization & UI Cleanup (Current)
+### v1.3 - Chat, Trade & Multiplayer Fixes (Current)
+- **Chat focus fix**: Chat input now retains focus across re-renders — if you were typing when a game event triggers a render, the cursor stays in the chat input instead of losing focus.
+- **Chat clearing fix**: Sent messages now properly clear from the input box. Fixed race condition where `network.sendChat()` triggered a synchronous callback→render() before `input.value = ''` could run.
+- **Trade identity fix**: Online trade proposals now include `fromPlayerId` from the sender. Previously, `handleRemoteAction` used `engine.getCurrentPlayer().id` for all actions, causing trades from non-active players to appear as "Player2 → Player2" when it was Player2's turn. Now uses `senderId` for trade, property management, and influence actions.
+- **`sendAction` includes sender ID**: `network.sendAction()` now always attaches `fromPlayerId` so the host can identify who sent any action.
+- **Board scaling/readability update** (css/styles.css):
+  - Board footprint formula (desktop): --avail-h: calc(100vh - 48px), --avail-w: calc(100vw - 464px), --board-s: min(--avail-h, --avail-w) * 0.99, with .board-container padding reduced to 2px.
+  - Content now scales with board cell size via clamp(...) driven by --cell / --corner (space names, prices, flags, icons, color bars, owner triangles, dev indicators, and player tokens), so board readability increases as the board grows.
+
+### v1.2 - Board Maximization & UI Cleanup
 - **Board fills available space**: Panels narrowed (220→200px left, 300→260px right), top bar 50→44px, container padding 6→4px, scale 0.98→0.99. Board now uses nearly all available space.
 - **Removed duplicate buttons**: "Propose Trade" and "View Properties" outline buttons removed from quick-actions section (duplicated the colored Management buttons above them).
 - **Panel widths**: `--avail-w` now `calc(100vw - 468px)` to match the narrower `200px + 260px + 8px` layout.

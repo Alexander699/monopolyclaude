@@ -2,7 +2,7 @@
 // GLOBAL ECONOMIC WARS - UI Renderer
 // ============================================================
 
-import { BOARD, ALLIANCES, DEVELOPMENT_TIERS, PLAYER_COLORS, PLAYER_AVATARS,
+import { BOARD, ALLIANCES, DEVELOPMENT_TIERS, RESOURCES, PLAYER_COLORS, PLAYER_AVATARS,
          STARTING_MONEY, GO_SALARY, SANCTIONS_BAIL, INFLUENCE_TO_WIN, MAX_PLAYERS, MIN_PLAYERS } from './gameData.js';
 import { GameEngine, createGameState } from './gameEngine.js';
 import { SoundManager } from './soundManager.js';
@@ -55,6 +55,7 @@ let lobbyPlayerName = '';
 let lobbyIsHost = false;
 let lobbyError = '';
 let selectedPropertyForDev = null;
+let selectedSpaceInfo = null; // Space ID for info modal (null = hidden)
 
 // ---- Board Layout Helpers ----
 // Board is 11x11 grid. Spaces go clockwise:
@@ -119,8 +120,9 @@ function render() {
     return;
   }
 
-  // Preserve chat input draft before re-render
+  // Preserve chat input state before re-render
   const chatEl = document.getElementById('chat-input-mini');
+  const chatWasFocused = chatEl && document.activeElement === chatEl;
   if (chatEl) chatInputDraft = chatEl.value;
 
   // Safety check: if we're not in an active animation, ensure animation flags are cleared
@@ -148,12 +150,12 @@ function render() {
       break;
   }
 
-  // Post-render: auto-scroll chat and restore cursor focus
+  // Post-render: auto-scroll chat and restore focus if chat was focused before
   const chatMsgs = document.getElementById('chat-messages-mini');
   if (chatMsgs) chatMsgs.scrollTop = chatMsgs.scrollHeight;
   const chatInput2 = document.getElementById('chat-input-mini');
-  if (chatInput2 && chatInputDraft) {
-    // Move cursor to end of input
+  if (chatInput2 && chatWasFocused) {
+    chatInput2.focus();
     chatInput2.setSelectionRange(chatInputDraft.length, chatInputDraft.length);
   }
 }
@@ -637,6 +639,7 @@ function renderGame() {
       ${showTradePanel ? renderTradePanel() : ''}
       ${showLogPanel ? renderLogPanel() : ''}
       ${showCardModal ? renderCardModal() : ''}
+      ${selectedSpaceInfo !== null ? renderSpaceInfoModal() : ''}
       ${state.gameOver ? renderGameOverOverlay() : ''}
     </div>
   `;
@@ -693,6 +696,34 @@ function renderPlayerCard(player, isCurrent) {
   `;
 }
 
+function renderCenterActionButton() {
+  if (!engine) return '';
+  const state = engine.state;
+  const currentPlayer = engine.getCurrentPlayer();
+  const isMyTurn = !localPlayerId || currentPlayer.id === localPlayerId;
+
+  if (!isMyTurn) {
+    return `<div class="center-action-btn"><div class="center-waiting">Waiting for ${currentPlayer.name}...</div></div>`;
+  }
+
+  let btnHtml = '';
+  switch (state.phase) {
+    case 'pre-roll':
+      if (currentPlayer.inSanctions) {
+        btnHtml = `<button class="btn btn-primary btn-lg center-roll-btn" id="btn-roll-center">🎲 Roll for Doubles</button>`;
+      } else {
+        btnHtml = `<button class="btn btn-primary btn-lg center-roll-btn" id="btn-roll-center">🎲 Roll Dice</button>`;
+      }
+      break;
+    case 'end-turn':
+      btnHtml = `<button class="btn btn-primary btn-lg center-roll-btn" id="btn-end-turn-center">⏭️ End Turn</button>`;
+      break;
+  }
+
+  if (!btnHtml) return '';
+  return `<div class="center-action-btn">${btnHtml}</div>`;
+}
+
 function renderBoard() {
   const state = engine.state;
   let html = '<div class="board">';
@@ -712,7 +743,10 @@ function renderBoard() {
   html += `<div class="dice-total">${diceTotal > 0 ? diceTotal : ''}</div>`;
   html += '</div>';
 
-  // Small game title below dice
+  // Main action button below dice
+  html += renderCenterActionButton();
+
+  // Small game title below action button
   html += '<div class="center-branding">';
   html += '<div class="center-logo">🌍</div>';
   html += '<div class="center-title-mini">Global Economic Wars</div>';
@@ -891,13 +925,11 @@ function renderActionPanel(currentPlayer, isMyTurn) {
     switch (state.phase) {
       case 'pre-roll':
         if (currentPlayer.inSanctions) {
+          // Roll button is on the board center; bail/immunity stay here
           html += `
-            <button class="btn btn-primary btn-lg" id="btn-roll">🎲 Roll for Doubles</button>
             <button class="btn btn-warning" id="btn-bail">💰 Pay Bail ($${SANCTIONS_BAIL})</button>
             ${currentPlayer.hasGetOutFree ? '<button class="btn btn-success" id="btn-immunity">📜 Use Diplomatic Immunity</button>' : ''}
           `;
-        } else {
-          html += `<button class="btn btn-primary btn-lg" id="btn-roll">🎲 Roll Dice</button>`;
         }
         break;
 
@@ -912,12 +944,10 @@ function renderActionPanel(currentPlayer, isMyTurn) {
         }
         break;
 
-      case 'end-turn':
-        html += `<button class="btn btn-primary btn-lg" id="btn-end-turn">⏭️ End Turn</button>`;
-        break;
+      // end-turn button is on the board center
     }
   } else {
-    html += `<div class="waiting-msg">Waiting for ${currentPlayer.name}...</div>`;
+    // Waiting message is shown on the board center
   }
 
   html += '</div>';
@@ -1264,6 +1294,91 @@ function renderCardModal() {
   `;
 }
 
+// ---- Space Info Modal ----
+function renderSpaceInfoModal() {
+  if (selectedSpaceInfo === null || !engine) return '';
+  const space = engine.getSpace(selectedSpaceInfo);
+  if (!space) return '';
+
+  const alliance = space.alliance ? ALLIANCES[space.alliance] : null;
+  const owner = space.owner ? engine.getPlayerById(space.owner) : null;
+  const resource = space.resource ? RESOURCES[space.resource] : null;
+
+  let bodyHtml = '';
+
+  if (space.type === 'country') {
+    bodyHtml += `
+      <div class="sinfo-row"><span>Price:</span><span>$${space.price}</span></div>
+      <div class="sinfo-row"><span>Alliance:</span><span style="color:${alliance?.color || '#fff'}">${alliance?.name || 'None'}</span></div>
+      <div class="sinfo-row"><span>Resource:</span><span>${resource ? resource.icon + ' ' + resource.name : 'None'}</span></div>
+      <div class="sinfo-divider"></div>
+      <div class="sinfo-label">Rent Schedule</div>
+      <div class="sinfo-row"><span>Base Rent:</span><span>$${space.rents[0]}</span></div>
+      ${space.rents.slice(1, 5).map((r, i) => `
+        <div class="sinfo-row"><span>${DEVELOPMENT_TIERS[i+1].icon} ${DEVELOPMENT_TIERS[i+1].name}:</span><span>$${r}</span></div>
+      `).join('')}
+      ${space.rents[5] ? `<div class="sinfo-row"><span>${DEVELOPMENT_TIERS[4].icon} ${DEVELOPMENT_TIERS[4].name}:</span><span>$${space.rents[5]}</span></div>` : ''}
+      <div class="sinfo-divider"></div>
+      <div class="sinfo-row"><span>Development:</span><span>${DEVELOPMENT_TIERS[space.developmentLevel].icon || '—'} ${DEVELOPMENT_TIERS[space.developmentLevel].name}</span></div>
+      <div class="sinfo-row"><span>Owner:</span><span ${owner ? `style="color:${owner.color}"` : ''}>${owner ? owner.name : 'Unowned'}</span></div>
+      ${space.mortgaged ? '<div class="sinfo-row"><span>Status:</span><span style="color:var(--danger)">Mortgaged</span></div>' : ''}
+      ${alliance ? `<div class="sinfo-divider"></div><div class="sinfo-label">Alliance Bonus</div><div class="sinfo-bonus">${alliance.bonus}</div>` : ''}
+    `;
+  } else if (space.type === 'transport') {
+    bodyHtml += `
+      <div class="sinfo-row"><span>Price:</span><span>$${space.price}</span></div>
+      <div class="sinfo-divider"></div>
+      <div class="sinfo-label">Rent (by # owned)</div>
+      ${space.rents.map((r, i) => `
+        <div class="sinfo-row"><span>${i+1} transport${i > 0 ? 's' : ''}:</span><span>$${r}</span></div>
+      `).join('')}
+      <div class="sinfo-divider"></div>
+      <div class="sinfo-row"><span>Owner:</span><span ${owner ? `style="color:${owner.color}"` : ''}>${owner ? owner.name : 'Unowned'}</span></div>
+    `;
+  } else if (space.type === 'infrastructure') {
+    bodyHtml += `
+      <div class="sinfo-row"><span>Price:</span><span>$${space.price}</span></div>
+      <div class="sinfo-divider"></div>
+      <div class="sinfo-row"><span>Rent:</span><span>4x / 10x dice roll</span></div>
+      <div class="sinfo-row"><span>Owner:</span><span ${owner ? `style="color:${owner.color}"` : ''}>${owner ? owner.name : 'Unowned'}</span></div>
+    `;
+  } else if (space.type === 'tax') {
+    bodyHtml += `
+      <div class="sinfo-row"><span>Tax Amount:</span><span>$${space.amount}</span></div>
+    `;
+  } else if (space.type === 'card') {
+    bodyHtml += `
+      <div class="sinfo-desc">${space.subtype === 'globalNews' ? 'Draw a Global News card affecting all players.' : 'Draw a personal Diplomatic Cable card.'}</div>
+    `;
+  } else if (space.type === 'special') {
+    const descriptions = {
+      go: 'Collect $' + GO_SALARY + ' salary each time you pass.',
+      jail: 'Just visiting — or sanctioned! Pay $' + SANCTIONS_BAIL + ', roll doubles, or use Diplomatic Immunity.',
+      free_parking: 'Rest here with no penalties.',
+      go_to_jail: 'Sent to Trade Sanctions immediately!'
+    };
+    bodyHtml += `<div class="sinfo-desc">${descriptions[space.subtype] || space.name}</div>`;
+  }
+
+  const headerColor = alliance?.color || (space.type === 'transport' ? '#555' : space.type === 'infrastructure' ? '#666' : 'var(--bg-hover)');
+  const flagOrIcon = space.flag ? getFlagHtml(space.flag) : (space.icon || '');
+
+  return `
+    <div class="modal-overlay" id="space-info-overlay">
+      <div class="modal space-info-modal">
+        <div class="sinfo-header" style="background:${headerColor}">
+          <span class="sinfo-icon">${flagOrIcon}</span>
+          <span class="sinfo-name">${space.name}</span>
+          <button class="sinfo-close" id="close-space-info">&times;</button>
+        </div>
+        <div class="sinfo-body">
+          ${bodyHtml}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 // ---- Game Over Overlay ----
 function renderGameOverOverlay() {
   const winner = engine.getPlayerById(engine.state.winner);
@@ -1317,13 +1432,15 @@ function attachGameEvents() {
   document.getElementById('btn-chat')?.addEventListener('click', () => { showChatPanel = !showChatPanel; render(); });
   document.getElementById('btn-save')?.addEventListener('click', handleSaveGame);
 
-  // Game actions
-  document.getElementById('btn-roll')?.addEventListener('click', handleRollDice);
+  // Game actions (center board buttons)
+  document.getElementById('btn-roll-center')?.addEventListener('click', handleRollDice);
+  document.getElementById('btn-end-turn-center')?.addEventListener('click', handleEndTurn);
+
+  // Game actions (side panel buttons)
   document.getElementById('btn-bail')?.addEventListener('click', handlePayBail);
   document.getElementById('btn-immunity')?.addEventListener('click', handleUseImmunity);
   document.getElementById('btn-buy')?.addEventListener('click', handleBuyProperty);
   document.getElementById('btn-decline')?.addEventListener('click', handleDecline);
-  document.getElementById('btn-end-turn')?.addEventListener('click', handleEndTurn);
 
   // Property/Trade buttons
   document.getElementById('btn-properties')?.addEventListener('click', () => { showPropertyPanel = true; render(); });
@@ -1491,8 +1608,22 @@ function attachGameEvents() {
   // Space click for info
   document.querySelectorAll('[data-space-id]').forEach(el => {
     el.addEventListener('click', () => {
-      // Could show space details
+      const spaceId = parseInt(el.dataset.spaceId);
+      selectedSpaceInfo = spaceId;
+      render();
     });
+  });
+
+  // Space info modal close
+  document.getElementById('close-space-info')?.addEventListener('click', () => {
+    selectedSpaceInfo = null;
+    render();
+  });
+  document.getElementById('space-info-overlay')?.addEventListener('click', (e) => {
+    if (e.target.id === 'space-info-overlay') {
+      selectedSpaceInfo = null;
+      render();
+    }
   });
 }
 
@@ -1526,9 +1657,14 @@ function isOnlineClient() {
 // Host: process an action received from a remote client
 function handleRemoteAction(data) {
   if (!engine) return;
-  console.log('[UI-HOST] Processing remote action:', data.actionType);
+  console.log('[UI-HOST] Processing remote action:', data.actionType, 'from:', data.fromPlayerId);
+
+  // Use the sender's player ID for actions any player can perform (trade, property mgmt).
+  // Fall back to current player for turn-based actions (roll, buy, end-turn).
+  const senderId = data.fromPlayerId || engine.getCurrentPlayer().id;
 
   switch (data.actionType) {
+    // --- Turn-based actions (only active player can do these) ---
     case 'roll-dice':
       if (engine.state.phase === 'pre-roll') {
         engine.rollDiceAction();
@@ -1552,16 +1688,16 @@ function handleRemoteAction(data) {
       engine.endTurn();
       break;
     case 'influence-action': {
-      const player = engine.getCurrentPlayer();
       if (data.action === 'embargo' && data.targetId) {
-        engine.useInfluenceAction(player.id, data.action, data.targetId);
+        engine.useInfluenceAction(senderId, data.action, data.targetId);
       } else {
-        engine.useInfluenceAction(player.id, data.action);
+        engine.useInfluenceAction(senderId, data.action);
       }
       break;
     }
+    // --- Any-player actions (use sender ID) ---
     case 'propose-trade':
-      engine.proposeTrade(engine.getCurrentPlayer().id, data.partnerId, data.offer);
+      engine.proposeTrade(senderId, data.partnerId, data.offer);
       break;
     case 'accept-trade':
       engine.acceptTrade(data.tradeId);
@@ -1570,19 +1706,19 @@ function handleRemoteAction(data) {
       engine.rejectTrade(data.tradeId);
       break;
     case 'develop-property':
-      engine.developProperty(engine.getCurrentPlayer().id, data.spaceId);
+      engine.developProperty(senderId, data.spaceId);
       break;
     case 'free-upgrade':
-      engine.freeUpgradeProperty(engine.getCurrentPlayer().id, data.spaceId);
+      engine.freeUpgradeProperty(senderId, data.spaceId);
       break;
     case 'mortgage-property':
-      engine.mortgageProperty(engine.getCurrentPlayer().id, data.spaceId);
+      engine.mortgageProperty(senderId, data.spaceId);
       break;
     case 'unmortgage-property':
-      engine.unmortgageProperty(engine.getCurrentPlayer().id, data.spaceId);
+      engine.unmortgageProperty(senderId, data.spaceId);
       break;
     case 'sell-development':
-      engine.sellDevelopment(engine.getCurrentPlayer().id, data.spaceId);
+      engine.sellDevelopment(senderId, data.spaceId);
       break;
   }
 }
@@ -1837,16 +1973,20 @@ function sendChatMessage(input) {
     text: input.value.trim(),
     time: Date.now()
   };
+
+  // Clear input and draft BEFORE sending, because sendChat triggers a
+  // synchronous callback→render() that would save the old value otherwise
+  input.value = '';
+  chatInputDraft = '';
+
   if (network) {
     // network.sendChat() handles adding locally via callback('chat', msg)
     network.sendChat(msg);
   } else {
     // Local mode - add directly
     addChatMessage(msg);
+    render();
   }
-  input.value = '';
-  chatInputDraft = '';
-  render();
 }
 
 function handleSaveGame() {

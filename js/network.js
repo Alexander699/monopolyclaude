@@ -239,6 +239,8 @@ export class NetworkManager {
       this.log('Cannot send action - not connected', 'error');
       return;
     }
+    // Always include the sender's player ID so the host knows who sent it
+    action.fromPlayerId = this.localPlayerId;
     this.log(`Sending action: ${action.actionType}`);
     this.socket.emit('game-action', action);
   }

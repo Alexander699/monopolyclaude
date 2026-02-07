@@ -192,11 +192,11 @@ export const PLAYER_COLORS = [
 // Example: img: 'assets/avatars/my-custom-icon.png'
 // The `emoji` field is used as a fallback if the image fails to load.
 export const PLAYER_AVATARS = [
-  { emoji: '🧳', img: 'https://www.vg.no/vgc/spesial/2026/berikelser-jn/assets/gfx/epstein/epstein.png' },
+  { emoji: '🧳', img: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT2QNEWfmzP8VFJykUrurNp2mT_LHW5W7_7rg&s' },
   { emoji: '📋', img: 'https://shapes.inc/api/public/avatar/bibinetanyahu'},
   { emoji: '🎩', img: 'https://cafebazaar.ir/app/com.narendramodiapp?l=en'},
-  { emoji: '👔', img: 'https://api.dicebear.com/9.x/bottts-neutral/svg?seed=player4' },
-  { emoji: '🗂️', img: 'https://api.dicebear.com/9.x/bottts-neutral/svg?seed=player5' },
+  { emoji: '👔', img: 'https://d3g9pb5nvr3u7.cloudfront.net/authors/529fac41929d4c756b000194/-764404409/256.jpg' },
+  { emoji: '🗂️', img: 'https://www.vg.no/vgc/spesial/2026/berikelser-jn/assets/gfx/epstein/epstein.png' },
   { emoji: '💼', img: 'https://api.dicebear.com/9.x/bottts-neutral/svg?seed=player6' },
   { emoji: '📊', img: 'https://api.dicebear.com/9.x/bottts-neutral/svg?seed=player7' },
   { emoji: '🏆', img: 'https://api.dicebear.com/9.x/bottts-neutral/svg?seed=player8' },
