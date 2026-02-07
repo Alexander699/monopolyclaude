@@ -33,15 +33,46 @@ let showPropertyPanel = false;
 let showTradePanel = false;
 let showLogPanel = false;
 let showChatPanel = false;
-let chatMessages = JSON.parse(localStorage.getItem('gew_chatHistory') || '[]');
+const CHAT_HISTORY_PREFIX = 'gew_chatHistory_';
+let chatStorageKey = null;
+let chatMessages = [];
 let chatInput = '';
 let chatInputDraft = '';
+
+function getChatStorageKeyForRoom(roomCode) {
+  if (!roomCode) return null;
+  return `${CHAT_HISTORY_PREFIX}${String(roomCode).toUpperCase().trim()}`;
+}
+
+function setChatRoomScope(roomCode, reset = false) {
+  chatStorageKey = getChatStorageKeyForRoom(roomCode);
+
+  if (!chatStorageKey) {
+    chatMessages = [];
+    return;
+  }
+
+  if (reset) {
+    chatMessages = [];
+    try { localStorage.removeItem(chatStorageKey); } catch (e) {}
+    return;
+  }
+
+  try {
+    const parsed = JSON.parse(localStorage.getItem(chatStorageKey) || '[]');
+    chatMessages = Array.isArray(parsed) ? parsed.slice(-200) : [];
+  } catch (e) {
+    chatMessages = [];
+  }
+}
 
 function addChatMessage(msg) {
   chatMessages.push(msg);
   // Keep max 200 messages in history
   if (chatMessages.length > 200) chatMessages = chatMessages.slice(-200);
-  try { localStorage.setItem('gew_chatHistory', JSON.stringify(chatMessages)); } catch(e) {}
+  if (chatStorageKey) {
+    try { localStorage.setItem(chatStorageKey, JSON.stringify(chatMessages)); } catch (e) {}
+  }
 }
 let animatingDice = false;
 let diceAnimationInProgress = false; // Moved here for proper scoping
@@ -439,6 +470,7 @@ function attachLobbyEvents() {
 
 function startLocalGame(names) {
   sound.init();
+  setChatRoomScope(null);
   const state = createGameState(names, selectedMapId);
   engine = new GameEngine(state);
   localPlayerId = null; // Local mode = all players on same device
@@ -453,7 +485,11 @@ function startLocalGame(names) {
 
 function hostOnlineGame(name) {
   sound.init();
+  if (network) {
+    network.destroy();
+  }
   network = new NetworkManager();
+  setChatRoomScope(null);
   lobbyPlayerName = name;
   lobbyIsHost = true;
   lobbyPlayers = [name];
@@ -466,6 +502,7 @@ function hostOnlineGame(name) {
       case 'room-created':
         console.log('[UI-HOST] Room created with code:', data.code);
         lobbyRoomCode = data.code;
+        setChatRoomScope(lobbyRoomCode, true);
         render();
         break;
       case 'player-joined':
@@ -526,7 +563,11 @@ function hostOnlineGame(name) {
 
 function joinOnlineGame(name, code) {
   sound.init();
+  if (network) {
+    network.destroy();
+  }
   network = new NetworkManager();
+  setChatRoomScope(null);
   lobbyPlayerName = name;
   lobbyIsHost = false;
   console.log('[UI] joinOnlineGame called, lobbyIsHost set to:', lobbyIsHost);
@@ -538,6 +579,7 @@ function joinOnlineGame(name, code) {
       case 'joined':
         console.log('[UI-CLIENT] Successfully joined room');
         lobbyRoomCode = code;
+        setChatRoomScope(lobbyRoomCode, true);
         lobbyPlayers = data.players;
         render();
         break;
@@ -1632,10 +1674,7 @@ function attachGameEvents() {
 
   // New game button
   document.getElementById('btn-new-game')?.addEventListener('click', () => {
-    engine = null;
-    appScreen = 'lobby';
-    lobbyPlayers = [];
-    render();
+    resetToLobby();
   });
 
   // Space click for info
@@ -1662,11 +1701,24 @@ function attachGameEvents() {
 
 function attachGameOverEvents() {
   document.getElementById('btn-new-game')?.addEventListener('click', () => {
-    engine = null;
-    appScreen = 'lobby';
-    lobbyPlayers = [];
-    render();
+    resetToLobby();
   });
+}
+
+function resetToLobby() {
+  if (network) {
+    network.destroy();
+    network = null;
+  }
+  engine = null;
+  localPlayerId = null;
+  lobbyRoomCode = '';
+  lobbyIsHost = false;
+  lobbyPlayers = [];
+  setChatRoomScope(null);
+  chatInputDraft = '';
+  appScreen = 'lobby';
+  render();
 }
 
 // ---- Action Handlers ----
