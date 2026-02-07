@@ -329,7 +329,15 @@ io.on('connection', (socket) => {
     socket.to(currentRoom).emit('global-news', { card });
   });
 
-  // --- Host kicks a player by playerId (typically inactive/disconnected) ---
+  // --- Host broadcasts animation events (for client-side visual sync) ---
+  socket.on('animation', ({ type, data }) => {
+    if (!currentRoom) return;
+    const room = rooms.get(currentRoom);
+    if (!room || room.hostSocketId !== socket.id) return;
+    socket.to(currentRoom).emit('animation', { type, data });
+  });
+
+  // --- Host kicks a player by playerId ---
   socket.on('kick-player', ({ playerId }) => {
     if (!currentRoom) return;
     const room = rooms.get(currentRoom);

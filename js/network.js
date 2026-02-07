@@ -177,6 +177,10 @@ export class NetworkManager {
       callback('chat', msg);
     });
 
+    this.socket.on('animation', (data) => {
+      callback('animation', data);
+    });
+
     this.socket.on('disconnect', () => {
       this.log('Disconnected from server', 'warn');
     });
@@ -253,6 +257,10 @@ export class NetworkManager {
 
     this.socket.on('chat', (msg) => {
       callback('chat', msg);
+    });
+
+    this.socket.on('animation', (data) => {
+      callback('animation', data);
     });
 
     this.socket.on('kicked', (data) => {
@@ -339,6 +347,11 @@ export class NetworkManager {
   broadcastGlobalNews(card) {
     if (!this.isHost || !this.socket) return;
     this.socket.emit('global-news', { card });
+  }
+
+  broadcastAnimation(type, data) {
+    if (!this.isHost || !this.socket || !type) return;
+    this.socket.emit('animation', { type, data });
   }
 
   sendAction(action) {

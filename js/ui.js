@@ -557,6 +557,11 @@ function hostOnlineGame(name) {
       case 'player-kicked':
         handleHostPlayerKicked(data);
         break;
+      case 'animation':
+        if (data?.type) {
+          handleAnimation(data.type, data.data);
+        }
+        break;
       case 'chat':
         addChatMessage(data);
         render();
@@ -634,6 +639,11 @@ function joinOnlineGame(name, code) {
           currentCardDisplay = data.card;
           showCardModal = true;
           render();
+        }
+        break;
+      case 'animation':
+        if (data?.type) {
+          handleAnimation(data.type, data.data);
         }
         break;
       case 'chat':
@@ -741,7 +751,8 @@ function renderPlayerCard(player, isCurrent) {
   const wealth = engine.calculateTotalWealth(player);
   const influencePercent = Math.min(100, (player.influence / INFLUENCE_TO_WIN) * 100);
   const isHostAdmin = !!(network && network.isHost && localPlayerId);
-  const showKickInactive = isHostAdmin && player.id !== localPlayerId && !player.bankrupt && player.connected === false;
+  const canKickPlayer = isHostAdmin && player.id !== localPlayerId && !player.bankrupt;
+  const kickLabel = player.connected === false ? 'Kick Inactive' : 'Kick Player';
 
   return `
     <div class="player-card ${isCurrent ? 'current' : ''} ${player.bankrupt ? 'bankrupt' : ''}"
@@ -776,9 +787,9 @@ function renderPlayerCard(player, isCurrent) {
           </div>
         </div>
       </div>
-      ${showKickInactive ? `
+      ${canKickPlayer ? `
         <div class="player-admin-actions">
-          <button class="btn btn-xs btn-danger" data-kick-player="${player.id}">Kick Inactive</button>
+          <button class="btn btn-xs btn-danger" data-kick-player="${player.id}">${kickLabel}</button>
         </div>
       ` : ''}
       ${player.properties.length > 0 ? `
@@ -1685,10 +1696,10 @@ function attachGameEvents() {
     });
   });
 
-  // Host moderation: kick inactive/disconnected players
+  // Host moderation: kick players
   document.querySelectorAll('[data-kick-player]').forEach(btn => {
     btn.addEventListener('click', () => {
-      handleKickInactivePlayer(btn.dataset.kickPlayer);
+      handleKickPlayer(btn.dataset.kickPlayer);
     });
   });
 
@@ -1773,13 +1784,13 @@ function handleHostPlayerConnection(data) {
   engine.emit();
 }
 
-function handleKickInactivePlayer(playerId) {
+function handleKickPlayer(playerId) {
   if (!network || !network.isHost || !engine || !playerId) return;
   const target = engine.getPlayerById(playerId);
   if (!target || target.id === localPlayerId || target.bankrupt) return;
-  if (target.connected !== false) return;
 
-  const confirmed = confirm(`Kick ${target.name} for inactivity? This will remove them from the match.`);
+  const reason = target.connected === false ? 'for inactivity' : 'from the match';
+  const confirmed = confirm(`Kick ${target.name} ${reason}? This cannot be undone.`);
   if (!confirmed) return;
   network.kickPlayer(playerId);
 }
@@ -2189,6 +2200,9 @@ function handleAnimation(type, data) {
       sound.playDiceRoll();
       break;
     case 'move':
+      if (network && network.isHost && data && data.from !== undefined && data.to !== undefined) {
+        network.broadcastAnimation('move', data);
+      }
       sound.playMove();
       // Animate player movement from cell to cell
       if (data && data.from !== undefined && data.to !== undefined) {
