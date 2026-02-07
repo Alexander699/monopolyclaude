@@ -163,7 +163,7 @@ export class NetworkManager {
     });
   }
 
-  startGame() {
+  startGame(mapId = 'classic') {
     this.log('=== startGame() called ===');
 
     if (!this.isHost) {
@@ -179,9 +179,9 @@ export class NetworkManager {
 
     import('./gameEngine.js').then(({ createGameState }) => {
       const playerNames = this.players.map(p => p.name);
-      this.log(`Creating game state for: ${playerNames.join(', ')}`);
+      this.log(`Creating game state for: ${playerNames.join(', ')} on map: ${mapId}`);
 
-      const state = createGameState(playerNames);
+      const state = createGameState(playerNames, mapId);
 
       // Assign player IDs
       this.players.forEach((playerInfo, i) => {

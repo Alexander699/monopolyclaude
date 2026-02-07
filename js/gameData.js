@@ -66,6 +66,22 @@ export const ALLIANCES = {
     lightColor: '#b366d9',
     bonus: 'Tourism income: $250/turn',
     resource: 'tourism'
+  },
+  PACIFIC_ISLANDS: {
+    id: 'PACIFIC_ISLANDS',
+    name: 'Pacific Islands',
+    color: '#00CED1',
+    lightColor: '#40E0D0',
+    bonus: 'Tourism boost: $200/turn',
+    resource: 'tourism'
+  },
+  NORDIC: {
+    id: 'NORDIC',
+    name: 'Nordic Council',
+    color: '#4682B4',
+    lightColor: '#6CA6CD',
+    bonus: '+75 influence per turn',
+    resource: 'tech'
   }
 };
 
@@ -137,6 +153,90 @@ export const BOARD = [
   { id: 39, type: 'country', name: 'Big Stein Island', alliance: 'AMERICAS', price: 4000, flag: '🇺🇸', resource: 'tech', rents: [150, 300, 900, 2000, 2500, 3200] }
 ];
 
+// Expanded Board Layout - 48 spaces (13x13 grid)
+// 30 countries across 10 alliances, 4 special, 6 cards, 2 tax, 4 transport, 2 infrastructure
+export const BOARD_EXPANDED = [
+  // === BOTTOM ROW (positions 0-12) ===
+  { id: 0, type: 'special', subtype: 'go', name: 'Global Summit', icon: '🌐' },
+  { id: 1, type: 'country', name: 'Moldova', alliance: 'EASTERN', price: 600, flag: '🇲🇩', resource: 'agriculture', rents: [20, 40, 120, 360, 640, 900] },
+  { id: 2, type: 'card', subtype: 'diplomaticCable', name: 'Diplomatic Cable', icon: '📜' },
+  { id: 3, type: 'country', name: 'Armenia', alliance: 'EASTERN', price: 800, flag: '🇦🇲', resource: 'tech', rents: [30, 60, 180, 500, 700, 1000], featured: true },
+  { id: 4, type: 'tax', name: 'Import Tariff', amount: 200, icon: '💰' },
+  { id: 5, type: 'transport', name: 'Maritime Routes', price: 2000, icon: '🚢', rents: [250, 500, 1000, 2000] },
+  { id: 6, type: 'country', name: 'Ukraine', alliance: 'EASTERN', price: 1000, flag: '🇺🇦', resource: 'agriculture', rents: [40, 80, 220, 600, 800, 1100] },
+  { id: 7, type: 'card', subtype: 'globalNews', name: 'Global News', icon: '📰' },
+  { id: 8, type: 'country', name: 'Nigeria', alliance: 'AFRICAN_RISING', price: 1000, flag: '🇳🇬', resource: 'oil', rents: [40, 80, 220, 600, 800, 1100] },
+  { id: 9, type: 'country', name: 'Kenya', alliance: 'AFRICAN_RISING', price: 1200, flag: '🇰🇪', resource: 'tourism', rents: [50, 100, 300, 750, 950, 1300] },
+  { id: 10, type: 'country', name: 'Mexico', alliance: 'AMERICAS', price: 1100, flag: '🇲🇽', resource: 'oil', rents: [45, 90, 260, 700, 880, 1200] },
+  { id: 11, type: 'country', name: 'Fiji', alliance: 'PACIFIC_ISLANDS', price: 900, flag: '🇫🇯', resource: 'tourism', rents: [35, 70, 200, 550, 750, 1050] },
+  { id: 12, type: 'special', subtype: 'sanctions', name: 'Trade Sanctions', icon: '⛔' },
+
+  // === LEFT COLUMN (positions 13-24) ===
+  { id: 13, type: 'country', name: 'Egypt', alliance: 'AFRICAN_RISING', price: 1200, flag: '🇪🇬', resource: 'tourism', rents: [50, 100, 300, 750, 950, 1300] },
+  { id: 14, type: 'infrastructure', name: 'Internet Backbone', price: 1500, icon: '🌐' },
+  { id: 15, type: 'country', name: 'South Africa', alliance: 'BRICS', price: 1400, flag: '🇿🇦', resource: 'tourism', rents: [55, 110, 330, 800, 1050, 1400] },
+  { id: 16, type: 'country', name: 'India', alliance: 'SOUTH_ASIAN', price: 1600, flag: '🇮🇳', resource: 'tech', rents: [65, 130, 400, 950, 1150, 1500], featured: true },
+  { id: 17, type: 'transport', name: 'Rail Networks', price: 2000, icon: '🚂', rents: [250, 500, 1000, 2000] },
+  { id: 18, type: 'country', name: 'Bangladesh', alliance: 'SOUTH_ASIAN', price: 1400, flag: '🇧🇩', resource: 'agriculture', rents: [55, 110, 330, 800, 1050, 1400] },
+  { id: 19, type: 'card', subtype: 'diplomaticCable', name: 'Diplomatic Cable', icon: '📜' },
+  { id: 20, type: 'country', name: 'Sri Lanka', alliance: 'SOUTH_ASIAN', price: 1600, flag: '🇱🇰', resource: 'tourism', rents: [65, 130, 400, 950, 1150, 1500] },
+  { id: 21, type: 'country', name: 'Nepal', alliance: 'SOUTH_ASIAN', price: 1200, flag: '🇳🇵', resource: 'tourism', rents: [50, 100, 300, 750, 950, 1300] },
+  { id: 22, type: 'country', name: 'Norway', alliance: 'NORDIC', price: 1800, flag: '🇳🇴', resource: 'oil', rents: [70, 140, 420, 1000, 1200, 1600] },
+  { id: 23, type: 'country', name: 'Sweden', alliance: 'NORDIC', price: 1800, flag: '🇸🇪', resource: 'tech', rents: [70, 140, 420, 1000, 1200, 1600] },
+  { id: 24, type: 'special', subtype: 'freetrade', name: 'Free Trade Zone', icon: '🆓' },
+
+  // === TOP ROW (positions 25-36) ===
+  { id: 25, type: 'country', name: 'France', alliance: 'EU', price: 2200, flag: '🇫🇷', resource: 'tourism', rents: [85, 170, 500, 1100, 1400, 1800] },
+  { id: 26, type: 'card', subtype: 'globalNews', name: 'Global News', icon: '📰' },
+  { id: 27, type: 'country', name: 'Germany', alliance: 'EU', price: 2400, flag: '🇩🇪', resource: 'tech', rents: [90, 180, 540, 1200, 1500, 2000] },
+  { id: 28, type: 'country', name: 'United Kingdom', alliance: 'EU', price: 2400, flag: '🇬🇧', resource: 'tech', rents: [90, 180, 540, 1200, 1500, 2000] },
+  { id: 29, type: 'transport', name: 'Air Routes', price: 2000, icon: '✈️', rents: [250, 500, 1000, 2000] },
+  { id: 30, type: 'country', name: 'Japan', alliance: 'ASIAN_TIGERS', price: 2800, flag: '🇯🇵', resource: 'tech', rents: [110, 220, 660, 1500, 1800, 2400] },
+  { id: 31, type: 'country', name: 'South Korea', alliance: 'ASIAN_TIGERS', price: 2600, flag: '🇰🇷', resource: 'tech', rents: [100, 200, 600, 1400, 1700, 2200] },
+  { id: 32, type: 'infrastructure', name: 'Shipping Lanes', price: 1500, icon: '⚓' },
+  { id: 33, type: 'country', name: 'China', alliance: 'BRICS', price: 3000, flag: '🇨🇳', resource: 'tech', rents: [120, 240, 720, 1600, 2000, 2600] },
+  { id: 34, type: 'country', name: 'Indonesia', alliance: 'SOUTH_ASIAN', price: 2000, flag: '🇮🇩', resource: 'agriculture', rents: [75, 150, 450, 1050, 1300, 1700] },
+  { id: 35, type: 'country', name: 'Papua New Guinea', alliance: 'PACIFIC_ISLANDS', price: 1600, flag: '🇵🇬', resource: 'agriculture', rents: [65, 130, 400, 950, 1150, 1500] },
+  { id: 36, type: 'special', subtype: 'incident', name: 'International Incident', icon: '🚨' },
+
+  // === RIGHT COLUMN (positions 37-47) ===
+  { id: 37, type: 'country', name: 'Brazil', alliance: 'BRICS', price: 2800, flag: '🇧🇷', resource: 'agriculture', rents: [110, 220, 660, 1500, 1800, 2400] },
+  { id: 38, type: 'country', name: 'Singapore', alliance: 'ASIAN_TIGERS', price: 2600, flag: '🇸🇬', resource: 'tech', rents: [100, 200, 600, 1400, 1700, 2200] },
+  { id: 39, type: 'card', subtype: 'diplomaticCable', name: 'Diplomatic Cable', icon: '📜' },
+  { id: 40, type: 'country', name: 'Saudi Arabia', alliance: 'OIL_NATIONS', price: 3200, flag: '🇸🇦', resource: 'oil', rents: [130, 260, 780, 1800, 2200, 2800] },
+  { id: 41, type: 'transport', name: 'Digital Networks', price: 2000, icon: '📡', rents: [250, 500, 1000, 2000] },
+  { id: 42, type: 'country', name: 'Canada', alliance: 'AMERICAS', price: 3200, flag: '🇨🇦', resource: 'agriculture', rents: [130, 260, 780, 1800, 2200, 2800] },
+  { id: 43, type: 'country', name: 'UAE', alliance: 'OIL_NATIONS', price: 3400, flag: '🇦🇪', resource: 'oil', rents: [140, 280, 840, 1900, 2400, 3000] },
+  { id: 44, type: 'country', name: 'Finland', alliance: 'NORDIC', price: 2200, flag: '🇫🇮', resource: 'tech', rents: [85, 170, 500, 1100, 1400, 1800] },
+  { id: 45, type: 'country', name: 'New Zealand', alliance: 'PACIFIC_ISLANDS', price: 2400, flag: '🇳🇿', resource: 'tourism', rents: [90, 180, 540, 1200, 1500, 2000] },
+  { id: 46, type: 'tax', name: 'Luxury Tax', amount: 300, icon: '💎' },
+  { id: 47, type: 'country', name: 'Big Stein Island', alliance: 'AMERICAS', price: 4000, flag: '🇺🇸', resource: 'tech', rents: [150, 300, 900, 2000, 2500, 3200] }
+];
+
+// Map Registry
+export const MAPS = {
+  classic: {
+    id: 'classic',
+    name: 'Classic',
+    description: '40 spaces · 22 countries · 8 alliances',
+    board: BOARD,
+    gridSize: 11,
+    cornerMultiplier: 1.15,
+    totalSpaces: 40,
+    corners: [0, 10, 20, 30]
+  },
+  expanded: {
+    id: 'expanded',
+    name: 'World Domination',
+    description: '48 spaces · 30 countries · 10 alliances',
+    board: BOARD_EXPANDED,
+    gridSize: 13,
+    cornerMultiplier: 1.12,
+    totalSpaces: 48,
+    corners: [0, 12, 24, 36]
+  }
+};
+
 // Global News Cards (16+)
 export const GLOBAL_NEWS_CARDS = [
   { id: 'gn1', title: 'Global Pandemic', text: 'Tourism industry collapses. All tourism countries pay $100 per development level.', effect: 'tourism_penalty', amount: 100 },
@@ -177,7 +277,7 @@ export const DIPLOMATIC_CABLE_CARDS = [
   { id: 'dc14', title: 'Arms Deal', text: 'Controversial but profitable. Collect $400 but lose 50 influence.', effect: 'arms_deal', collectAmount: 400, influenceLoss: 50 },
   { id: 'dc15', title: 'Cultural Exchange', text: 'Soft power initiative! Gain 50 influence and collect $100.', effect: 'cultural_exchange', influence: 50, amount: 100 },
   { id: 'dc16', title: 'Cyber Attack', text: 'Your systems compromised! Pay $150 in recovery costs.', effect: 'pay', amount: 150 },
-  { id: 'dc17', title: 'Advance to India', text: 'Special economic summit in Mumbai! Advance to India.', effect: 'advance_to', spaceId: 14 },
+  { id: 'dc17', title: 'Advance to India', text: 'Special economic summit in Mumbai! Advance to India.', effect: 'advance_to', spaceName: 'India' },
   { id: 'dc18', title: 'Heritage Fund', text: 'Cultural heritage grant! Collect $250.', effect: 'collect', amount: 250 }
 ];
 

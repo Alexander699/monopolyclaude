@@ -3,7 +3,8 @@
 // ============================================================
 
 import { BOARD, ALLIANCES, DEVELOPMENT_TIERS, GLOBAL_NEWS_CARDS, DIPLOMATIC_CABLE_CARDS,
-         STARTING_MONEY, GO_SALARY, SANCTIONS_BAIL, INFLUENCE_TO_WIN, PLAYER_COLORS, PLAYER_AVATARS } from './gameData.js';
+         STARTING_MONEY, GO_SALARY, SANCTIONS_BAIL, INFLUENCE_TO_WIN, PLAYER_COLORS, PLAYER_AVATARS,
+         MAPS } from './gameData.js';
 
 // ---- Utility ----
 function shuffle(arr) {
@@ -50,17 +51,22 @@ function createPlayer(name, index) {
 }
 
 // ---- Game State Factory ----
-export function createGameState(playerNames) {
+export function createGameState(playerNames, mapId = 'classic') {
   const players = playerNames.map((name, i) => createPlayer(name, i));
   const globalNewsDeck = shuffle([...GLOBAL_NEWS_CARDS]);
   const diplomaticDeck = shuffle([...DIPLOMATIC_CABLE_CARDS]);
+  const mapConfig = MAPS[mapId] || MAPS.classic;
 
   return {
     id: generateId(),
+    mapId: mapConfig.id,
+    totalSpaces: mapConfig.totalSpaces,
+    corners: mapConfig.corners,
+    gridSize: mapConfig.gridSize,
     players,
     currentPlayerIndex: 0,
     phase: 'pre-roll',  // pre-roll, rolling, moving, landed, action, trade, end-turn
-    board: BOARD.map(space => ({
+    board: mapConfig.board.map(space => ({
       ...space,
       owner: null,
       developmentLevel: 0,
@@ -307,7 +313,7 @@ export class GameEngine {
 
   movePlayer(player, spaces) {
     const oldPos = player.position;
-    const newPos = (player.position + spaces) % 40;
+    const newPos = (player.position + spaces) % this.state.totalSpaces;
 
     // Check if passed GO
     if (newPos < oldPos && spaces > 0) {
@@ -439,7 +445,8 @@ export class GameEngine {
   }
 
   sendToSanctions(player) {
-    player.position = 10;
+    // Sanctions is the 2nd corner (index 1 in corners array)
+    player.position = this.state.corners[1];
     player.inSanctions = true;
     player.sanctionsTurns = 0;
     player.doublesCount = 0;
@@ -666,14 +673,21 @@ export class GameEngine {
         this.state.pendingFreeUpgrade = player.id;
         break;
 
-      case 'advance_to':
-        this.movePlayerTo(player, card.spaceId, true);
+      case 'advance_to': {
+        // Support spaceName (finds by name) or spaceId (legacy)
+        let targetId = card.spaceId;
+        if (card.spaceName) {
+          const found = this.state.board.find(s => s.name === card.spaceName);
+          if (found) targetId = found.id;
+        }
+        if (targetId !== undefined) this.movePlayerTo(player, targetId, true);
         break;
+      }
 
       case 'advance_tourism':
         // Find nearest tourism country
-        for (let i = 1; i < 40; i++) {
-          const pos = (player.position + i) % 40;
+        for (let i = 1; i < this.state.totalSpaces; i++) {
+          const pos = (player.position + i) % this.state.totalSpaces;
           const s = this.getSpace(pos);
           if (s.type === 'country' && s.resource === 'tourism') {
             this.movePlayerTo(player, pos, true);
@@ -683,8 +697,8 @@ export class GameEngine {
         break;
 
       case 'advance_unowned':
-        for (let i = 1; i < 40; i++) {
-          const pos = (player.position + i) % 40;
+        for (let i = 1; i < this.state.totalSpaces; i++) {
+          const pos = (player.position + i) % this.state.totalSpaces;
           const s = this.getSpace(pos);
           if (s.type === 'country' && !s.owner) {
             this.movePlayerTo(player, pos, true);
@@ -1019,6 +1033,16 @@ export class GameEngine {
         // Americas: free upgrade handled via flag
         if (this.hasCompleteAlliance(player.id, 'AMERICAS')) {
           this.state.pendingFreeUpgrade = player.id;
+        }
+        // Pacific Islands: $200/turn tourism boost
+        if (this.hasCompleteAlliance(player.id, 'PACIFIC_ISLANDS')) {
+          this.adjustMoney(player, 200);
+          this.log(`${player.name} collects $200 from Pacific Tourism Boost!`, 'success');
+        }
+        // Nordic Council: +75 influence/turn
+        if (this.hasCompleteAlliance(player.id, 'NORDIC')) {
+          player.influence += 75;
+          this.log(`${player.name} gains 75 influence from Nordic Council!`, 'success');
         }
       });
     }

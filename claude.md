@@ -1,7 +1,7 @@
 # Global Economic Wars - Project Documentation
 
 ## Overview
-A browser-based multiplayer board game inspired by property trading games (Monopoly-style) but with unique mechanics centered around countries and global economics. Players compete as global investors to build economic empires.
+A browser-based multiplayer board game inspired by property trading games (Monopoly-style) but with unique mechanics centered around countries and global economics. Players compete as global investors to build economic empires. Supports two map variants: a Classic 11x11 board (40 spaces) and an expanded World Domination 13x13 board (48 spaces).
 
 ## Project Structure
 ```
@@ -9,9 +9,9 @@ Online Monopoly/
 ├── index.html              # Entry point, loads Socket.IO CDN and modules
 ├── claude.md               # This documentation file
 ├── css/
-│   └── styles.css          # Complete styling (~1700 lines, dark diplomatic theme)
+│   └── styles.css          # Complete styling (~1900 lines, dark diplomatic theme)
 ├── js/
-│   ├── gameData.js         # Board configuration, cards, alliances, constants
+│   ├── gameData.js         # Board configuration, cards, alliances, maps, constants
 │   ├── gameEngine.js       # Core game logic, state management, rules
 │   ├── ui.js               # UI rendering, event handling, animations
 │   ├── soundManager.js     # Web Audio API sound effects
@@ -77,16 +77,65 @@ Host processes in GameEngine → Broadcasts state → Server relays to all Clien
 - Card decks stripped from network payloads (`stripCardDecks()`) to reduce message size
 - Start Game button double-checks both `lobbyIsHost` and `network.isHost`
 
+## Map System
+
+### Map Selection
+Players choose a map in the lobby before starting the game. The map selection UI appears between the game panels and the rules footer, showing clickable cards for each map variant.
+
+- **State variable**: `selectedMapId` in ui.js (defaults to `'classic'`)
+- **Map registry**: `MAPS` object in gameData.js defines all available maps
+- **Host selects map**: In online mode, the host's map selection is used when `network.startGame(selectedMapId)` is called
+- **Map metadata in game state**: `state.mapId`, `state.totalSpaces`, `state.corners`, `state.gridSize` are stored in the game state and used by all dynamic logic
+
+### Map Registry (gameData.js → `MAPS`)
+```javascript
+MAPS = {
+  classic: {
+    id: 'classic', name: 'Classic',
+    description: '40 spaces · 22 countries · 8 alliances',
+    board: BOARD, gridSize: 11, totalSpaces: 40,
+    corners: [0, 10, 20, 30]
+  },
+  expanded: {
+    id: 'expanded', name: 'World Domination',
+    description: '48 spaces · 30 countries · 10 alliances',
+    board: BOARD_EXPANDED, gridSize: 13, totalSpaces: 48,
+    corners: [0, 12, 24, 36]
+  }
+}
+```
+
+### Dynamic Board Rendering
+All board logic is now driven by `state.gridSize`, `state.totalSpaces`, and `state.corners` rather than hardcoded values:
+- **`getSpacePosition(id)`** — computes {row, col} dynamically based on `gridSize` (works for any NxN board)
+- **`renderBoard()`** — loops over `state.board.length`, uses `state.corners` for corner detection and side assignment
+- **CSS** — `.board` class renders 11x11 (classic), `.board.board-13` class overrides to 13x13 (expanded)
+- **Movement wrapping** — `% state.totalSpaces` instead of `% 40`
+- **Sanctions position** — `state.corners[1]` instead of hardcoded `10`
+
+### Classic Board Layout (40 spaces, 11x11 grid)
+```
+Bottom (0-10):  GO → Moldova → DiploCable → Armenia → Tariff → Maritime → Ukraine → GlobalNews → Nigeria → Kenya → Sanctions
+Left (11-20):   Egypt → Internet → SouthAfrica → India → Rail → Bangladesh → DiploCable → SriLanka → Nepal → FreeTrade
+Top (21-30):    France → GlobalNews → Germany → UK → AirRoutes → Japan → SouthKorea → Shipping → China → Incident
+Right (31-39):  Brazil → Singapore → DiploCable → SaudiArabia → Digital → Canada → UAE → LuxuryTax → USA
+```
+
+### Expanded Board Layout (48 spaces, 13x13 grid)
+```
+Bottom (0-12):  GO → Moldova → DiploCable → Armenia → Tariff → Maritime → Ukraine → GlobalNews → Nigeria → Kenya → Mexico → Fiji → Sanctions
+Left (13-24):   Egypt → Internet → SouthAfrica → India → Rail → Bangladesh → DiploCable → SriLanka → Nepal → Norway → Sweden → FreeTrade
+Top (25-36):    France → GlobalNews → Germany → UK → AirRoutes → Japan → SouthKorea → Shipping → China → Indonesia → PapuaNewGuinea → Incident
+Right (37-47):  Brazil → Singapore → DiploCable → SaudiArabia → Digital → Canada → UAE → Finland → NewZealand → LuxuryTax → USA
+```
+
+New countries in expanded: Mexico (AMERICAS), Fiji (PACIFIC_ISLANDS), Norway (NORDIC), Sweden (NORDIC), Indonesia (SOUTH_ASIAN), Papua New Guinea (PACIFIC_ISLANDS), Finland (NORDIC), New Zealand (PACIFIC_ISLANDS)
+
 ## Game Mechanics
 
 ### Victory Conditions
 1. **Influence Victory**: First to reach 1000 Influence Points
 2. **Last Standing**: Be the last solvent player
-
-### Board Layout (40 spaces, clockwise)
-- **Corners**: Global Summit (GO), Trade Sanctions (Jail), Free Trade Zone, International Incident
-- **Countries**: 23 countries across 8 alliances
-- **Other**: 4 transports, 2 infrastructure, 2 taxes, 5 card spaces
 
 ### Alliances & Their Bonuses
 Own ALL countries in an alliance to unlock the bonus (like Monopoly color sets).
@@ -96,12 +145,16 @@ Must complete an alliance before developing (building) on any of its countries.
 |----------|-----------|------------------|
 | EASTERN | Moldova, Armenia, Ukraine | +50 influence/turn |
 | AFRICAN_RISING | Nigeria, Kenya, Egypt | $250 tourism income/turn |
-| SOUTH_ASIAN | India, Bangladesh, Sri Lanka, Nepal | +$200 on all rent collected |
+| SOUTH_ASIAN | India, Bangladesh, Sri Lanka, Nepal (+Indonesia on expanded) | +$200 on all rent collected |
 | BRICS | South Africa, China, Brazil | +100 influence per rent payment |
 | EU | France, Germany, UK | Double rent on developed properties |
 | ASIAN_TIGERS | Japan, South Korea, Singapore | Tech Hub costs -50% |
 | OIL_NATIONS | Saudi Arabia, UAE | $300 oil royalties/turn |
-| AMERICAS | Canada, USA | Free development upgrade/round |
+| AMERICAS | Canada, USA (+Mexico on expanded) | Free development upgrade/round |
+| PACIFIC_ISLANDS | Fiji, Papua New Guinea, New Zealand | $200 tourism boost/turn |
+| NORDIC | Norway, Sweden, Finland | +75 influence/turn |
+
+**Note:** PACIFIC_ISLANDS and NORDIC alliances only appear on the expanded "World Domination" map. AMERICAS and SOUTH_ASIAN gain extra members on the expanded map.
 
 ### Development Tiers (replaces houses/hotels)
 1. **Local Markets** (🏪) - Cost: 50% of price, 2x rent
@@ -125,6 +178,37 @@ Countries produce: oil, tech, agriculture, tourism
 - Sanctions Bail: $500
 - Influence to Win: 1,000
 
+## UI Features
+
+### Center Board Controls
+The Roll Dice and End Turn buttons are displayed in the center of the board, below the dice display, rather than in the side panel. This makes them the focal point of gameplay:
+- **Roll Dice / Roll for Doubles** button — appears during `pre-roll` phase
+- **End Turn** button — appears during `end-turn` phase
+- **Waiting message** — shown to non-active players ("Waiting for [name]...")
+- Bail and Immunity buttons remain in the right-side action panel
+- Keyboard shortcuts (Space/Enter) still trigger the same handlers
+
+### Space Info Modal
+Clicking any board cell opens an info modal displaying detailed information:
+- **Countries**: price, alliance, resource, full rent schedule (all 5 development tiers), current development level, owner, mortgage status, and alliance completion bonus
+- **Transports**: price, rent by number owned (1-4), owner
+- **Infrastructure**: price, rent formula (4x/10x dice roll), owner
+- **Tax spaces**: tax amount
+- **Card spaces**: description of what the card deck does
+- **Corner/special spaces**: description (GO salary, jail rules, etc.)
+- Modal has a colored header matching the alliance color, with flag/icon and space name
+- Closes by clicking X button, clicking outside the modal, or pressing the overlay
+
+### CSS Classes for Space Info Modal
+- `.space-info-modal` — modal container with dark theme
+- `.sinfo-header` — colored header with flag, name, close button
+- `.sinfo-body` — content area
+- `.sinfo-row` — key-value row (label + value)
+- `.sinfo-divider` — horizontal separator
+- `.sinfo-label` — section label (uppercase, muted)
+- `.sinfo-bonus` — alliance bonus text (gold, italic)
+- `.sinfo-desc` — description text for non-country spaces
+
 ## Customizing Player Avatars
 Player avatars are defined in `js/gameData.js` in the `PLAYER_AVATARS` array. Each entry is:
 ```javascript
@@ -140,7 +224,27 @@ Player avatars are defined in `js/gameData.js` in the `PLAYER_AVATARS` array. Ea
 
 ## Recent Changes (Latest First)
 
-### v1.3 - Chat, Trade & Multiplayer Fixes (Current)
+### v1.4 - Map System, Center Controls & Space Info (Current)
+- **Two map variants**: Classic (11x11, 40 spaces) and World Domination (13x13, 48 spaces) selectable in lobby
+- **Map selection UI**: Clickable cards in lobby showing map name, description, and grid size; highlighted selection with blue glow
+- **Map registry** (`MAPS` in gameData.js): Defines board data, grid size, total spaces, and corner positions per map
+- **Expanded board**: 48 spaces with 30 countries across 10 alliances including 8 new countries (Mexico, Fiji, Norway, Sweden, Indonesia, Papua New Guinea, Finland, New Zealand) and 2 new alliances (Pacific Islands, Nordic Council)
+- **Flag image reliability fix (all maps)**: Added automatic flag emoji to ISO code conversion (`flagEmojiToCode`) inside `getFlagHtml()`, so newly added countries render as flag images instead of letter fallbacks (e.g., Fiji `FJ`)
+- **Horizontal layout rebalance (height unchanged)**: Side panels widened on desktop via CSS vars (`--panel-left-w: 260px`, `--panel-right-w: 340px`) to use previously empty left/right space; board height formula remains `--avail-h: calc(100vh - 48px)`
+- **Shared board sizing path**: Width calculation now uses panel width vars (`--avail-w: calc(100vw - var(--panel-left-w) - var(--panel-right-w) - var(--layout-side-padding))`), so the same spacing fix applies to both Classic and Expanded boards
+- **New alliance bonuses**: Pacific Islands ($200 tourism boost/turn), Nordic Council (+75 influence/turn)
+- **Dynamic board engine**: All `% 40` replaced with `% state.totalSpaces`, sanctions position uses `state.corners[1]`, `getSpacePosition()` computes layout from `state.gridSize`
+- **CSS `.board-13` class**: Overrides grid to 13x13 with `repeat(11, var(--cell))` inner cells and board-center spanning `2/13`
+- **`createGameState(playerNames, mapId)`**: Now accepts optional `mapId` parameter (defaults to `'classic'`); stores map metadata in state
+- **`network.startGame(mapId)`**: Passes map selection from host to game creation
+- **Card dc17 fix**: "Advance to India" now uses `spaceName: 'India'` instead of hardcoded `spaceId: 14`, so it works on both maps
+- **Save/load backwards compatibility**: Old saves without map metadata get classic map defaults injected on load
+- **Roll Dice / End Turn moved to board center**: Main action buttons now render below the dice in the board center area via `renderCenterActionButton()`, with pulsing blue glow animation
+- **Side panel cleaned up**: Roll/End Turn buttons removed from right-side action panel; bail/immunity buttons remain
+- **Space info modal**: Clicking any board cell opens a modal with full space details (price, alliance, resource, rent schedule, owner, development level, alliance bonus)
+- **Space info styling**: Dark-themed modal (`.space-info-modal`) with colored alliance header, animated entrance
+
+### v1.3 - Chat, Trade & Multiplayer Fixes
 - **Chat focus fix**: Chat input now retains focus across re-renders — if you were typing when a game event triggers a render, the cursor stays in the chat input instead of losing focus.
 - **Chat clearing fix**: Sent messages now properly clear from the input box. Fixed race condition where `network.sendChat()` triggered a synchronous callback→render() before `input.value = ''` could run.
 - **Trade identity fix**: Online trade proposals now include `fromPlayerId` from the sender. Previously, `handleRemoteAction` used `engine.getCurrentPlayer().id` for all actions, causing trades from non-active players to appear as "Player2 → Player2" when it was Player2's turn. Now uses `senderId` for trade, property management, and influence actions.
@@ -214,14 +318,17 @@ Player avatars are defined in `js/gameData.js` in the `PLAYER_AVATARS` array. Ea
 - [ ] Mobile responsive improvements
 - [ ] Auction system when player declines to buy
 - [ ] AI opponents
+- [ ] More map variants (e.g., 15x15 mega board)
 
 ## File Details
 
 ### gameData.js
-- `ALLIANCES` - Alliance definitions with colors and bonuses
+- `ALLIANCES` - 10 alliance definitions with colors and bonuses (8 base + PACIFIC_ISLANDS, NORDIC)
 - `RESOURCES` - Resource types and their effects
 - `DEVELOPMENT_TIERS` - Building upgrade levels
-- `BOARD` - Array of 40 space objects
+- `BOARD` - Array of 40 space objects (classic 11x11 map)
+- `BOARD_EXPANDED` - Array of 48 space objects (expanded 13x13 map)
+- `MAPS` - Map registry: `{ classic, expanded }` each with `board`, `gridSize`, `totalSpaces`, `corners`
 - `GLOBAL_NEWS_CARDS` - 18 world event cards
 - `DIPLOMATIC_CABLE_CARDS` - 18 personal event cards
 - `PLAYER_AVATARS` - Array of `{emoji, img}` objects (customizable)
@@ -229,11 +336,12 @@ Player avatars are defined in `js/gameData.js` in the `PLAYER_AVATARS` array. Ea
 - Constants: STARTING_MONEY, GO_SALARY, SANCTIONS_BAIL, INFLUENCE_TO_WIN
 
 ### gameEngine.js
-- `createGameState(playerNames)` - Factory to create initial state
+- `createGameState(playerNames, mapId)` - Factory to create initial state; `mapId` defaults to `'classic'`, stores map metadata in state (`mapId`, `totalSpaces`, `corners`, `gridSize`)
 - `GameEngine` class:
   - State management and event emission
   - `rollDiceAction()` - Handle dice roll
-  - `movePlayer()` / `movePlayerTo()` - Movement logic
+  - `movePlayer()` / `movePlayerTo()` - Movement logic (wraps via `% state.totalSpaces`)
+  - `sendToSanctions()` - Sends player to `state.corners[1]` (dynamic sanctions position)
   - `handleLanding()` - Process landing on spaces
   - `calculateRent()` - Rent with all bonuses
   - `buyProperty()` / `developProperty()` / `freeUpgradeProperty()` - Property management
@@ -242,25 +350,32 @@ Player avatars are defined in `js/gameData.js` in the `PLAYER_AVATARS` array. Ea
   - `useInfluenceAction()` - Influence powers
   - `checkWinCondition()` - Victory detection
   - `getPlayerById()` - Lookup player by ID
+  - Alliance bonuses: OIL_NATIONS, EASTERN, AFRICAN_RISING, AMERICAS, PACIFIC_ISLANDS, NORDIC
 
-### ui.js (~1900 lines)
+### ui.js (~2100 lines)
 - `getAvatarHtml(avatar, size)` - Renders player avatar as image with emoji fallback
 - `addChatMessage(msg)` - Adds chat message and persists to localStorage
 - `isOnlineClient()` - Returns true when playing online as non-host
 - `handleRemoteAction(data)` - Host dispatches remote client actions to engine
 - `initApp()` - Entry point, initializes state
 - `render()` - Main render dispatcher (preserves chat input, auto-scrolls chat, defers while animation in progress)
-- `renderLobby()` / `renderGame()` - Screen renderers
-- `renderBoard()` - 11x11 CSS grid board with calc-based square sizing
+- `renderLobby()` / `renderGame()` - Screen renderers; lobby includes map selection
+- `renderBoard()` - Dynamic NxN CSS grid board; applies `.board-13` class for expanded map
+- `renderCenterActionButton()` - Renders Roll Dice / End Turn button in the board center below dice
+- `renderSpaceInfoModal()` - Renders detailed space info popup when a board cell is clicked
 - `renderPlayerCard()` - Player info panels
-- `renderActionPanel()` - Context-sensitive actions with trade notification badge
+- `renderActionPanel()` - Context-sensitive actions with trade notification badge (bail/immunity only; roll/end turn moved to center)
 - `renderPropertyPanel()` - Uses local player (not current turn player) in online mode
 - `renderTradePanel()` - Uses local player in online mode
-- `attachGameEvents()` - Event listener setup
+- `getSpacePosition(id)` - Dynamic grid position calculation based on `state.gridSize`
+- `flagEmojiToCode(flagEmoji)` - Converts regional-indicator flag emoji to ISO country code (example: `🇫🇯` -> `FJ`)
+- `attachGameEvents()` - Event listener setup (includes center button handlers, space click → info modal)
 - `handleRollDice()` - Dice animation + engine call (or sendAction for clients)
-- `animatePlayerMovement()` - Smooth floating token sliding between cells (render() defers while active)
-- `getFlagHtml()` - Converts flag emoji to image for cross-platform display
+- `animatePlayerMovement()` - Smooth floating token sliding between cells (wraps via `% state.totalSpaces`)
+- `getFlagHtml()` - Converts flag emoji to image for cross-platform display; now also falls back to `flagEmojiToCode()` for new countries not present in the static map
 - `hostOnlineGame()` / `joinOnlineGame()` - Network setup with callbacks
+- `handleLoadGame()` - Loads saved game with backwards compatibility for pre-map saves
+- **State variables**: `selectedMapId` (lobby map choice), `selectedSpaceInfo` (space info modal)
 - Debug tools at bottom (window.enableDebug(), window.debug.*)
 
 ### network.js (Socket.IO Client)
@@ -268,7 +383,7 @@ Player avatars are defined in `js/gameData.js` in the `PLAYER_AVATARS` array. Ea
 - `SERVER_URL` auto-detects localhost vs production
 - `host(name, callback)` - Creates room via server
 - `join(name, code, callback)` - Joins room via server
-- `startGame()` - Host creates state, sends to server for relay to clients
+- `startGame(mapId)` - Host creates state with selected map, sends to server for relay to clients
 - `broadcastState(state)` - Host sends state to all clients (strips card decks)
 - `broadcastGlobalNews(card)` - Host sends Global News card to all clients
 - `sendAction(action)` - Client sends action to host via server
@@ -306,9 +421,23 @@ Server relays state-update → Client: Object.assign(engine.state, ...) → rend
 ```
 
 ### Board Coordinate System
-- 11x11 CSS Grid, always square: `--board-s = min(avail-height, avail-width) * 0.96`
-- `getSpacePosition(id)` converts space ID (0-39) to {row, col}
-- Clockwise: Bottom (0-10) → Left (11-20) → Top (21-30) → Right (31-39)
+- Dynamic NxN CSS Grid (11x11 or 13x13), always square: `--board-s = min(avail-height, avail-width) * 0.99`
+- `getSpacePosition(id)` converts space ID to {row, col} based on `state.gridSize`
+- For an NxN grid (N = `gridSize`, corners at positions 0, N-1, 2*(N-1), 3*(N-1)):
+  - Bottom row: IDs 0 to N-1 → row=N-1, col=N-1-id (right to left)
+  - Left column: IDs N to 2*(N-1)-1 → row=N-1-(id-N+1), col=0 (bottom to top)
+  - Top-left corner: ID 2*(N-1) → row=0, col=0
+  - Top row: IDs 2*(N-1)+1 to 3*(N-1) → row=0, col=id-2*(N-1) (left to right)
+  - Right column: IDs 3*(N-1)+1 to 4*(N-1)-1 → row=id-3*(N-1), col=N-1 (top to bottom)
+- Classic: Bottom (0-10) → Left (11-20) → Top (21-30) → Right (31-39)
+- Expanded: Bottom (0-12) → Left (13-24) → Top (25-36) → Right (37-47)
+
+### CSS Grid Classes
+- `.board` — default 11x11 grid: `--corner: calc(--board-s / 11 * 1.15)`, `--cell: calc((--board-s - 2*--corner) / 9)`, `repeat(9, var(--cell))`
+- `.board.board-13` — overrides to 13x13: `--corner: calc(--board-s / 13 * 1.12)`, `--cell: calc((--board-s - 2*--corner) / 11)`, `repeat(11, var(--cell))`
+- `.board-center` — grid-row/col `2/11` (classic) or `2/13` (expanded)
+- Board footprint now uses dynamic panel widths: `--avail-h: calc(100vh - 48px)` and `--avail-w: calc(100vw - var(--panel-left-w) - var(--panel-right-w) - var(--layout-side-padding))`; desktop defaults are 260px (left) and 340px (right)
+- All space content (icons, text, flags, tokens) uses `clamp()` with `var(--cell)` so it scales automatically
 
 ### Rendering
 - Full re-render on state change (simple but works)
@@ -316,6 +445,14 @@ Server relays state-update → Client: Object.assign(engine.state, ...) → rend
 - Event listeners re-attached after each render
 - Chat input text preserved across re-renders via `chatInputDraft`
 - Chat auto-scrolls to bottom after each render
+
+### Adding New Maps
+To add a third map variant:
+1. Define a new board array in `gameData.js` (e.g., `BOARD_MEGA` with 56 spaces for 15x15)
+2. Add an entry to the `MAPS` object with `id`, `name`, `description`, `board`, `gridSize`, `totalSpaces`, `corners`
+3. Add a CSS class `.board.board-15` in styles.css with the appropriate grid overrides
+4. Add the class condition in `renderBoard()` (line: `const boardClass = ...`)
+5. Everything else (position calculation, movement, alliances, rendering) is fully dynamic
 
 ## Testing & Debug Mode
 
@@ -330,9 +467,9 @@ Server relays state-update → Client: Object.assign(engine.state, ...) → rend
 window.enableDebug()
 
 window.debug.giveMoney(5000)
-window.debug.giveProperty(14)              // India
+window.debug.giveProperty(14)              // India (classic map ID)
 window.debug.giveInfluence(500)
-window.debug.moveTo(10)                    // Trade Sanctions
+window.debug.moveTo(10)                    // Trade Sanctions (classic)
 window.debug.completeAlliance('EASTERN')
 window.debug.drawCard('globalNews')
 window.debug.bankruptPlayer(1)
@@ -344,24 +481,32 @@ window.debug.listSpaces()
 window.debug.listAlliances()
 ```
 
-### Key Space IDs
+### Key Space IDs (Classic Map)
 - 0: Global Summit (GO), 10: Trade Sanctions (Jail), 20: Free Trade Zone, 30: International Incident
 - 3: Armenia, 14: India, 39: USA (most expensive)
+
+### Key Space IDs (Expanded Map)
+- 0: Global Summit (GO), 12: Trade Sanctions (Jail), 24: Free Trade Zone, 36: International Incident
+- 3: Armenia, 16: India, 47: USA (most expensive)
+- New: 10: Mexico, 11: Fiji, 22: Norway, 23: Sweden, 34: Indonesia, 35: Papua New Guinea, 44: Finland, 45: New Zealand
 
 ## Quick Reference
 
 ### Starting a Local Game
 1. Open http://localhost:8080
 2. Set number of players (2-8), enter names
-3. Click "Start Game"
+3. Choose a map (Classic or World Domination)
+4. Click "Start Game"
 
 ### Starting an Online Game
 1. **Host**: Enter name, click "Create Room", share the 5-letter code
-2. **Client**: Enter name + room code, click "Join Room"
-3. **Host**: Click "Start Game (Host)" when all players have joined
+2. **Host**: Choose a map (Classic or World Domination)
+3. **Client**: Enter name + room code, click "Join Room"
+4. **Host**: Click "Start Game (Host)" when all players have joined
 
 ### Game Controls
 - **Space/Enter**: Roll dice or End Turn
-- **Click board spaces**: View details
-- **Save button**: Saves to localStorage
-- **Load button**: Appears if save exists
+- **Click board spaces**: View space details (info modal)
+- **Roll Dice / End Turn**: Centered below dice on the board
+- **Save button**: Saves to localStorage (includes map metadata)
+- **Load button**: Appears if save exists (backwards compatible with pre-map saves)

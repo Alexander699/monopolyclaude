@@ -2,7 +2,7 @@
 // GLOBAL ECONOMIC WARS - UI Renderer
 // ============================================================
 
-import { BOARD, ALLIANCES, DEVELOPMENT_TIERS, RESOURCES, PLAYER_COLORS, PLAYER_AVATARS,
+import { BOARD, ALLIANCES, DEVELOPMENT_TIERS, RESOURCES, PLAYER_COLORS, PLAYER_AVATARS, MAPS,
          STARTING_MONEY, GO_SALARY, SANCTIONS_BAIL, INFLUENCE_TO_WIN, MAX_PLAYERS, MIN_PLAYERS } from './gameData.js';
 import { GameEngine, createGameState } from './gameEngine.js';
 import { SoundManager } from './soundManager.js';
@@ -56,29 +56,36 @@ let lobbyIsHost = false;
 let lobbyError = '';
 let selectedPropertyForDev = null;
 let selectedSpaceInfo = null; // Space ID for info modal (null = hidden)
+let selectedMapId = 'classic'; // Map selection (classic or expanded)
 
 // ---- Board Layout Helpers ----
-// Board is 11x11 grid. Spaces go clockwise:
-// Bottom row: 0(BR corner) to 10(BL corner) - left to right visually reversed
-// Left column: 11 to 20(TL corner) - bottom to top
-// Top row: 21 to 30(TR corner) - left to right
-// Right column: 31 to 39 - top to bottom
+// Board is NxN grid (11x11 for classic, 13x13 for expanded). Spaces go clockwise:
+// Bottom row: 0(BR corner) to N-1(BL corner) - right to left
+// Left column: N to 2*(N-1)-1 then 2*(N-1)=TL corner - bottom to top
+// Top row: 2*(N-1)+1 to 3*(N-1)=TR corner - left to right
+// Right column: 3*(N-1)+1 to 4*(N-1)-1 - top to bottom
 
 function getSpacePosition(id) {
-  if (id <= 10) {
-    // Bottom row: right to left (0=bottom-right, 10=bottom-left)
-    return { row: 10, col: 10 - id };
-  } else if (id <= 19) {
-    // Left column: bottom to top (11=row9, 19=row1)
-    return { row: 10 - (id - 10), col: 0 };
-  } else if (id === 20) {
-    return { row: 0, col: 0 }; // Top-left corner
-  } else if (id <= 30) {
-    // Top row: left to right (21=col1, 30=col10)
-    return { row: 0, col: id - 20 };
+  // Use engine state if in-game, otherwise use selected map for lobby/init
+  const gridSize = engine ? engine.state.gridSize : MAPS[selectedMapId].gridSize;
+  const maxIdx = gridSize - 1;      // e.g. 10 for 11x11, 12 for 13x13
+  const perSide = gridSize - 1;     // cells per side edge (excluding wrap), e.g. 10 or 12
+
+  if (id < gridSize) {
+    // Bottom row: right to left (0=bottom-right corner, perSide=bottom-left corner)
+    return { row: maxIdx, col: maxIdx - id };
+  } else if (id < 2 * perSide) {
+    // Left column: bottom to top
+    return { row: maxIdx - (id - perSide), col: 0 };
+  } else if (id === 2 * perSide) {
+    // Top-left corner
+    return { row: 0, col: 0 };
+  } else if (id <= 3 * perSide) {
+    // Top row: left to right
+    return { row: 0, col: id - 2 * perSide };
   } else {
-    // Right column: top to bottom (31=row1, 39=row9)
-    return { row: id - 30, col: 10 };
+    // Right column: top to bottom
+    return { row: id - 3 * perSide, col: maxIdx };
   }
 }
 
@@ -292,6 +299,21 @@ function renderLobby() {
           </div>
         </div>
 
+        <!-- Map Selection -->
+        <div class="map-selection">
+          <h3 class="map-selection-title">🗺️ Choose Your Map</h3>
+          <div class="map-cards">
+            ${Object.values(MAPS).map(m => `
+              <div class="map-card ${selectedMapId === m.id ? 'selected' : ''}" data-map="${m.id}">
+                <div class="map-card-icon">${m.gridSize === 11 ? '🌍' : '🌏'}</div>
+                <div class="map-card-name">${m.name}</div>
+                <div class="map-card-desc">${m.description}</div>
+                <div class="map-card-grid">${m.gridSize}×${m.gridSize} board</div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+
         <div class="lobby-footer">
           <div class="game-rules-preview">
             <h3>How to Win</h3>
@@ -352,6 +374,14 @@ function attachLobbyEvents() {
     });
   });
 
+  // Map selection
+  document.querySelectorAll('.map-card').forEach(card => {
+    card.addEventListener('click', () => {
+      selectedMapId = card.dataset.map;
+      render();
+    });
+  });
+
   // Start local game
   const startBtn = document.querySelector('.start-local-btn');
   if (startBtn) {
@@ -391,8 +421,8 @@ function attachLobbyEvents() {
     console.log('[UI] Attaching click handler to Start button (host only)');
     startOnlineBtn.addEventListener('click', () => {
       if (network && network.isHost && lobbyPlayers.length >= 2) {
-        console.log('[UI] Starting game...');
-        network.startGame();
+        console.log('[UI] Starting game with map:', selectedMapId);
+        network.startGame(selectedMapId);
       }
     });
   } else if (startOnlineBtn && !isHost) {
@@ -409,7 +439,7 @@ function attachLobbyEvents() {
 
 function startLocalGame(names) {
   sound.init();
-  const state = createGameState(names);
+  const state = createGameState(names, selectedMapId);
   engine = new GameEngine(state);
   localPlayerId = null; // Local mode = all players on same device
 
@@ -726,7 +756,8 @@ function renderCenterActionButton() {
 
 function renderBoard() {
   const state = engine.state;
-  let html = '<div class="board">';
+  const boardClass = state.gridSize === 13 ? 'board board-13' : 'board';
+  let html = `<div class="${boardClass}">`;
 
   // Render center area - dice centered prominently
   html += '<div class="board-center">';
@@ -754,17 +785,19 @@ function renderBoard() {
 
   html += '</div>';
 
-  // Render all 40 spaces
-  for (let i = 0; i < 40; i++) {
+  // Render all spaces (dynamic based on map)
+  const totalSpaces = state.board.length;
+  const corners = state.corners;
+  for (let i = 0; i < totalSpaces; i++) {
     const space = state.board[i];
     const pos = getSpacePosition(i);
-    const isCorner = [0, 10, 20, 30].includes(i);
+    const isCorner = corners.includes(i);
 
-    // Determine side for orientation
+    // Determine side for orientation based on corner positions
     let side;
-    if (i <= 10) side = 'bottom';
-    else if (i <= 20) side = 'left';
-    else if (i <= 30) side = 'top';
+    if (i <= corners[1]) side = 'bottom';
+    else if (i <= corners[2]) side = 'left';
+    else if (i <= corners[3]) side = 'top';
     else side = 'right';
 
     // Players on this space
@@ -2001,6 +2034,13 @@ function handleLoadGame() {
   if (!data) return false;
   try {
     const state = JSON.parse(data);
+    // Backwards compatibility: old saves lack map metadata
+    if (!state.mapId) {
+      state.mapId = 'classic';
+      state.totalSpaces = 40;
+      state.corners = [0, 10, 20, 30];
+      state.gridSize = 11;
+    }
     engine = new GameEngine(state);
     engine.on(() => render());
     engine.onAnimation((type, data) => handleAnimation(type, data));
@@ -2079,7 +2119,7 @@ function animatePlayerMovement(playerId, fromPos, toPos) {
   const path = [];
   let current = fromPos;
   while (current !== toPos) {
-    current = (current + 1) % 40;
+    current = (current + 1) % engine.state.totalSpaces;
     path.push(current);
   }
 
@@ -2175,14 +2215,32 @@ const FLAG_TO_CODE = {
   '🇨🇦': 'CA', '🇦🇪': 'AE', '🇺🇸': 'US'
 };
 
+// Convert a country flag emoji (regional indicators) to ISO code, e.g. 🇫🇯 -> FJ.
+function flagEmojiToCode(flagEmoji) {
+  if (!flagEmoji || typeof flagEmoji !== 'string') return null;
+  const parts = Array.from(flagEmoji.trim());
+  if (parts.length !== 2) return null;
+
+  const regionalA = 0x1F1E6;
+  const asciiA = 65;
+  const letters = parts.map((part) => {
+    const codePoint = part.codePointAt(0);
+    if (codePoint < regionalA || codePoint > regionalA + 25) return null;
+    return String.fromCharCode(asciiA + (codePoint - regionalA));
+  });
+
+  if (letters.some((letter) => letter === null)) return null;
+  return letters.join('');
+}
+
 // Convert flag emoji to an img tag using flagcdn.com
 function getFlagHtml(flagEmoji) {
-  const code = FLAG_TO_CODE[flagEmoji];
+  const code = FLAG_TO_CODE[flagEmoji] || flagEmojiToCode(flagEmoji);
   if (code) {
     // Use flagcdn.com for reliable SVG flags
     return `<img src="https://flagcdn.com/w40/${code.toLowerCase()}.png" alt="${flagEmoji}" class="country-flag-img" onerror="this.outerHTML='${flagEmoji}'">`;
   }
-  return flagEmoji;
+  return flagEmoji || '';
 }
 
 function escapeHtml(str) {

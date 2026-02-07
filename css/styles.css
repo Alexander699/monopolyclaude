@@ -25,6 +25,9 @@
   --board-border: #15803d;
   --space-bg: #d4e8d0;
   --space-border: #9ca3af;
+  --panel-left-w: 260px;
+  --panel-right-w: 340px;
+  --layout-side-padding: 4px;
   --font-main: 'Segoe UI', system-ui, -apple-system, sans-serif;
   --font-mono: 'Cascadia Code', 'Fira Code', monospace;
   --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
@@ -353,6 +356,76 @@ body {
   border-radius: var(--radius-sm);
 }
 
+/* Map Selection */
+.map-selection {
+  margin-bottom: 20px;
+}
+
+.map-selection-title {
+  text-align: center;
+  font-size: 18px;
+  color: var(--gold);
+  margin-bottom: 12px;
+}
+
+.map-cards {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+}
+
+.map-card {
+  flex: 1;
+  max-width: 260px;
+  background: var(--bg-card);
+  border: 2px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.map-card:hover {
+  border-color: var(--border-light);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.map-card.selected {
+  border-color: var(--info);
+  background: rgba(59,130,246,0.1);
+  box-shadow: 0 0 16px rgba(59,130,246,0.3);
+}
+
+.map-card-icon {
+  font-size: 36px;
+  margin-bottom: 8px;
+}
+
+.map-card-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.map-card-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.map-card-grid {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  padding: 3px 10px;
+  background: var(--bg-secondary);
+  border-radius: 10px;
+  display: inline-block;
+}
+
 .lobby-footer {
   text-align: center;
 }
@@ -460,7 +533,7 @@ body {
 .game-layout {
   flex: 1;
   display: grid;
-  grid-template-columns: 200px 1fr 260px;
+  grid-template-columns: var(--panel-left-w) 1fr var(--panel-right-w);
   gap: 0;
   overflow: hidden;
   min-height: 0;
@@ -627,10 +700,10 @@ body {
   /*
    * Board is always a square: use the smaller of available height vs width.
    * Available height = 100vh - top bar (44px) - container padding (4px)
-   * Available width  = 100vw - left panel (200px) - right panel (260px) - container padding (4px)
+   * Available width  = 100vw - left panel - right panel - container padding (4px)
    */
   --avail-h: calc(100vh - 48px);
-  --avail-w: calc(100vw - 464px);
+  --avail-w: calc(100vw - var(--panel-left-w) - var(--panel-right-w) - var(--layout-side-padding));
   --board-size: min(var(--avail-h), var(--avail-w));
   --board-s: calc(var(--board-size) * 0.99);
   --corner: calc(var(--board-s) / 11 * 1.15);
@@ -655,6 +728,19 @@ body {
   justify-content: center;
   position: relative;
   z-index: 1;
+}
+
+/* Expanded 13x13 board variant */
+.board.board-13 {
+  --corner: calc(var(--board-s) / 13 * 1.12);
+  --cell: calc((var(--board-s) - 2 * var(--corner)) / 11);
+  grid-template-columns: var(--corner) repeat(11, var(--cell)) var(--corner);
+  grid-template-rows: var(--corner) repeat(11, var(--cell)) var(--corner);
+}
+
+.board.board-13 .board-center {
+  grid-row: 2 / 13;
+  grid-column: 2 / 13;
 }
 
 /* Dice area - centered prominently */
@@ -1798,13 +1884,9 @@ body {
    ============================================================ */
 
 @media (max-width: 1200px) {
-  .game-layout {
-    grid-template-columns: 170px 1fr 220px;
-  }
-
-  /* Recalculate available width for narrower side panels */
-  .board {
-    --avail-w: calc(100vw - 398px);
+  :root {
+    --panel-left-w: 190px;
+    --panel-right-w: 250px;
   }
 }
 
@@ -1839,6 +1921,15 @@ body {
 
   .lobby-panels {
     grid-template-columns: 1fr;
+  }
+
+  .map-cards {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .map-card {
+    max-width: 100%;
   }
 
   .rules-grid {
