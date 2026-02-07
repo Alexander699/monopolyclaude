@@ -1966,8 +1966,8 @@ function handleSendTrade() {
     render();
     return;
   }
-  const player = engine.getCurrentPlayer();
-  engine.proposeTrade(player.id, selectedTradePartner, { ...tradeOffer });
+  const proposerId = localPlayerId || engine.getCurrentPlayer().id;
+  engine.proposeTrade(proposerId, selectedTradePartner, { ...tradeOffer });
   showTradePanel = false;
   tradeOffer = { giveMoney: 0, getMoney: 0, giveProperties: [], getProperties: [] };
   selectedTradePartner = null;
