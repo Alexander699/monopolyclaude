@@ -470,6 +470,7 @@ function attachLobbyEvents() {
 
 function startLocalGame(names) {
   sound.init();
+  lobbyError = '';
   setChatRoomScope(null);
   const state = createGameState(names, selectedMapId);
   engine = new GameEngine(state);
@@ -485,6 +486,7 @@ function startLocalGame(names) {
 
 function hostOnlineGame(name) {
   sound.init();
+  lobbyError = '';
   if (network) {
     network.destroy();
   }
@@ -549,13 +551,23 @@ function hostOnlineGame(name) {
       case 'action':
         handleRemoteAction(data);
         break;
+      case 'player-connection':
+        handleHostPlayerConnection(data);
+        break;
+      case 'player-kicked':
+        handleHostPlayerKicked(data);
+        break;
       case 'chat':
         addChatMessage(data);
         render();
         break;
       case 'error':
-        lobbyError = data.message;
-        render();
+        if (appScreen === 'game') {
+          resetToLobby(data.message || 'Connection lost.');
+        } else {
+          lobbyError = data.message;
+          render();
+        }
         break;
     }
   });
@@ -563,6 +575,7 @@ function hostOnlineGame(name) {
 
 function joinOnlineGame(name, code) {
   sound.init();
+  lobbyError = '';
   if (network) {
     network.destroy();
   }
@@ -579,7 +592,7 @@ function joinOnlineGame(name, code) {
       case 'joined':
         console.log('[UI-CLIENT] Successfully joined room');
         lobbyRoomCode = code;
-        setChatRoomScope(lobbyRoomCode, true);
+        setChatRoomScope(lobbyRoomCode, !data.rejoined);
         lobbyPlayers = data.players;
         render();
         break;
@@ -627,9 +640,16 @@ function joinOnlineGame(name, code) {
         addChatMessage(data);
         render();
         break;
+      case 'kicked':
+        resetToLobby(data.message || 'You were removed by the host.');
+        break;
       case 'error':
-        lobbyError = data.message;
-        render();
+        if (appScreen === 'game') {
+          resetToLobby(data.message || 'Connection lost.');
+        } else {
+          lobbyError = data.message;
+          render();
+        }
         break;
     }
   });
@@ -720,6 +740,8 @@ function renderGame() {
 function renderPlayerCard(player, isCurrent) {
   const wealth = engine.calculateTotalWealth(player);
   const influencePercent = Math.min(100, (player.influence / INFLUENCE_TO_WIN) * 100);
+  const isHostAdmin = !!(network && network.isHost && localPlayerId);
+  const showKickInactive = isHostAdmin && player.id !== localPlayerId && !player.bankrupt && player.connected === false;
 
   return `
     <div class="player-card ${isCurrent ? 'current' : ''} ${player.bankrupt ? 'bankrupt' : ''}"
@@ -730,6 +752,7 @@ function renderPlayerCard(player, isCurrent) {
           <span class="player-name">${player.name}</span>
           ${player.bankrupt ? '<span class="bankrupt-label">BANKRUPT</span>' : ''}
           ${player.inSanctions ? '<span class="sanctions-label">SANCTIONED</span>' : ''}
+          ${player.connected === false && !player.bankrupt ? '<span class="offline-label">OFFLINE</span>' : ''}
         </div>
       </div>
       <div class="player-card-stats">
@@ -753,6 +776,11 @@ function renderPlayerCard(player, isCurrent) {
           </div>
         </div>
       </div>
+      ${showKickInactive ? `
+        <div class="player-admin-actions">
+          <button class="btn btn-xs btn-danger" data-kick-player="${player.id}">Kick Inactive</button>
+        </div>
+      ` : ''}
       ${player.properties.length > 0 ? `
         <div class="player-properties-mini">
           ${player.properties.slice(0, 8).map(pid => {
@@ -1657,6 +1685,13 @@ function attachGameEvents() {
     });
   });
 
+  // Host moderation: kick inactive/disconnected players
+  document.querySelectorAll('[data-kick-player]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      handleKickInactivePlayer(btn.dataset.kickPlayer);
+    });
+  });
+
   // Chat - inline mini chat
   document.getElementById('btn-send-chat-mini')?.addEventListener('click', handleSendChatMini);
   const chatInputEl = document.getElementById('chat-input-mini');
@@ -1705,7 +1740,7 @@ function attachGameOverEvents() {
   });
 }
 
-function resetToLobby() {
+function resetToLobby(errorMessage = '') {
   if (network) {
     network.destroy();
     network = null;
@@ -1715,10 +1750,52 @@ function resetToLobby() {
   lobbyRoomCode = '';
   lobbyIsHost = false;
   lobbyPlayers = [];
+  lobbyError = errorMessage;
   setChatRoomScope(null);
   chatInputDraft = '';
   appScreen = 'lobby';
   render();
+}
+
+function handleHostPlayerConnection(data) {
+  if (!engine || !network || !network.isHost || !data?.playerId) return;
+  const player = engine.getPlayerById(data.playerId);
+  if (!player) return;
+
+  const isConnected = data.connected !== false;
+  if ((player.connected !== false) === isConnected) return;
+
+  player.connected = isConnected;
+  engine.log(
+    `${player.name} ${isConnected ? 'reconnected.' : 'disconnected.'}`,
+    isConnected ? 'success' : 'warning'
+  );
+  engine.emit();
+}
+
+function handleKickInactivePlayer(playerId) {
+  if (!network || !network.isHost || !engine || !playerId) return;
+  const target = engine.getPlayerById(playerId);
+  if (!target || target.id === localPlayerId || target.bankrupt) return;
+  if (target.connected !== false) return;
+
+  const confirmed = confirm(`Kick ${target.name} for inactivity? This will remove them from the match.`);
+  if (!confirmed) return;
+  network.kickPlayer(playerId);
+}
+
+function handleHostPlayerKicked(data) {
+  if (!engine || !network || !network.isHost || !data?.playerId) return;
+  const player = engine.getPlayerById(data.playerId);
+  if (!player || player.bankrupt) return;
+
+  const wasCurrentTurn = engine.getCurrentPlayer()?.id === player.id;
+  player.connected = false;
+  engine.declareBankruptcy(player);
+
+  if (wasCurrentTurn && !engine.state.gameOver) {
+    engine.endTurn();
+  }
 }
 
 // ---- Action Handlers ----

@@ -616,6 +616,16 @@ body {
   font-weight: 700;
 }
 
+.offline-label {
+  font-size: 10px;
+  color: #94a3b8;
+  font-weight: 700;
+}
+
+.player-admin-actions {
+  margin-top: 6px;
+}
+
 .player-card-stats {
   display: grid;
   grid-template-columns: 1fr 1fr;

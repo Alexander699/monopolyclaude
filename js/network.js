@@ -3,11 +3,17 @@
 // ============================================================
 
 // Socket.IO relay server - host is still the game authority,
-// server just relays messages between host and clients.
+// server relays actions/state between host and clients.
 
 const SERVER_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? `http://${window.location.hostname}:3000`
   : 'https://monopolyclaude.onrender.com';
+
+const CLIENT_ID_KEY = 'gew_client_id';
+
+function createClientId() {
+  return `c_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+}
 
 export class NetworkManager {
   constructor() {
@@ -16,8 +22,53 @@ export class NetworkManager {
     this.roomCode = '';
     this.playerName = '';
     this.callback = null;
-    this.players = []; // Array of {name, peerId, playerId}
+    this.players = []; // Array of {name, clientId, playerId, connected}
     this.localPlayerId = null;
+    this.clientId = this.getOrCreateClientId();
+    this.wasKicked = false;
+  }
+
+  getOrCreateClientId() {
+    try {
+      let id = localStorage.getItem(CLIENT_ID_KEY);
+      if (!id) {
+        id = createClientId();
+        localStorage.setItem(CLIENT_ID_KEY, id);
+      }
+      return id;
+    } catch (e) {
+      return createClientId();
+    }
+  }
+
+  persistClientId(id) {
+    if (!id) return;
+    this.clientId = id;
+    try { localStorage.setItem(CLIENT_ID_KEY, id); } catch (e) {}
+  }
+
+  setPlayers(players, participants) {
+    if (Array.isArray(participants) && participants.length > 0) {
+      this.players = participants.map(p => ({
+        name: p.name,
+        clientId: p.clientId || null,
+        playerId: p.playerId || null,
+        connected: p.connected !== false
+      }));
+      return;
+    }
+
+    this.players = (players || []).map((entry) => {
+      if (typeof entry === 'string') {
+        return { name: entry, clientId: null, playerId: null, connected: true };
+      }
+      return {
+        name: entry?.name || 'Player',
+        clientId: entry?.clientId || null,
+        playerId: entry?.playerId || null,
+        connected: entry?.connected !== false
+      };
+    });
   }
 
   log(msg, type = 'info') {
@@ -65,30 +116,56 @@ export class NetworkManager {
     this.isHost = true;
     this.playerName = name;
     this.callback = callback;
-    this.players = [{ name, playerId: null }];
+    this.wasKicked = false;
+    this.players = [{ name, clientId: this.clientId, playerId: null, connected: true }];
 
     this.connectSocket();
 
     this.socket.on('connect', () => {
-      this.socket.emit('create-room', { name });
+      this.socket.emit('create-room', { name, clientId: this.clientId });
     });
 
-    this.socket.on('room-created', ({ code }) => {
-      this.log(`Room created: ${code}`);
-      this.roomCode = code;
-      callback('room-created', { code });
+    this.socket.on('room-created', (data) => {
+      this.log(`Room created: ${data.code}`);
+      this.roomCode = data.code;
+      if (data.clientId) this.persistClientId(data.clientId);
+      this.setPlayers(data.players, data.participants);
+      callback('room-created', {
+        code: data.code,
+        players: this.players.map(p => p.name),
+        participants: this.players
+      });
     });
 
-    this.socket.on('player-joined', ({ players, newPlayer }) => {
-      this.log(`Player joined: ${newPlayer} (${players.length} total)`);
-      this.players = players.map(n => ({ name: n, playerId: null }));
-      callback('player-joined', { players });
+    this.socket.on('player-joined', ({ players, participants, newPlayer, reconnected }) => {
+      this.log(`Player joined: ${newPlayer || 'unknown'} (${players?.length || 0} total)`);
+      this.setPlayers(players, participants);
+      callback('player-joined', {
+        players: this.players.map(p => p.name),
+        participants: this.players,
+        newPlayer,
+        reconnected: !!reconnected
+      });
     });
 
-    this.socket.on('player-left', ({ players, leftPlayer }) => {
-      this.log(`Player left: ${leftPlayer}`);
-      this.players = players.map(n => ({ name: n, playerId: null }));
-      callback('player-left', { players });
+    this.socket.on('player-left', ({ players, participants, leftPlayer, disconnected, kicked }) => {
+      this.log(`Player left: ${leftPlayer || 'unknown'}`);
+      this.setPlayers(players, participants);
+      callback('player-left', {
+        players: this.players.map(p => p.name),
+        participants: this.players,
+        leftPlayer,
+        disconnected: !!disconnected,
+        kicked: !!kicked
+      });
+    });
+
+    this.socket.on('player-connection', (data) => {
+      callback('player-connection', data);
+    });
+
+    this.socket.on('player-kicked', (data) => {
+      callback('player-kicked', data);
     });
 
     this.socket.on('game-action', (data) => {
@@ -110,30 +187,51 @@ export class NetworkManager {
     this.playerName = name;
     this.roomCode = code.toUpperCase().trim();
     this.callback = callback;
+    this.wasKicked = false;
 
     this.connectSocket();
 
     this.socket.on('connect', () => {
       this.log(`Joining room: ${this.roomCode}`);
-      this.socket.emit('join-room', { code: this.roomCode, name });
+      this.socket.emit('join-room', {
+        code: this.roomCode,
+        name,
+        clientId: this.clientId
+      });
     });
 
-    this.socket.on('joined', ({ players }) => {
-      this.log(`Joined room with players: ${players.join(', ')}`);
-      this.players = players.map(n => ({ name: n, playerId: null }));
-      callback('joined', { players });
+    this.socket.on('joined', (data) => {
+      this.log(`Joined room with players: ${(data.players || []).join(', ')}`);
+      if (data.clientId) this.persistClientId(data.clientId);
+      this.setPlayers(data.players, data.participants);
+      callback('joined', {
+        players: this.players.map(p => p.name),
+        participants: this.players,
+        rejoined: !!data.rejoined
+      });
     });
 
-    this.socket.on('player-joined', ({ players, newPlayer }) => {
-      this.log(`Player joined: ${newPlayer}`);
-      this.players = players.map(n => ({ name: n, playerId: null }));
-      callback('player-joined', { players });
+    this.socket.on('player-joined', ({ players, participants, newPlayer, reconnected }) => {
+      this.log(`Player joined: ${newPlayer || 'unknown'}`);
+      this.setPlayers(players, participants);
+      callback('player-joined', {
+        players: this.players.map(p => p.name),
+        participants: this.players,
+        newPlayer,
+        reconnected: !!reconnected
+      });
     });
 
-    this.socket.on('player-left', ({ players, leftPlayer }) => {
-      this.log(`Player left: ${leftPlayer}`);
-      this.players = players.map(n => ({ name: n, playerId: null }));
-      callback('player-left', { players });
+    this.socket.on('player-left', ({ players, participants, leftPlayer, disconnected, kicked }) => {
+      this.log(`Player left: ${leftPlayer || 'unknown'}`);
+      this.setPlayers(players, participants);
+      callback('player-left', {
+        players: this.players.map(p => p.name),
+        participants: this.players,
+        leftPlayer,
+        disconnected: !!disconnected,
+        kicked: !!kicked
+      });
     });
 
     this.socket.on('game-start', (data) => {
@@ -157,9 +255,16 @@ export class NetworkManager {
       callback('chat', msg);
     });
 
+    this.socket.on('kicked', (data) => {
+      this.wasKicked = true;
+      callback('kicked', data);
+    });
+
     this.socket.on('disconnect', () => {
       this.log('Disconnected from server', 'warn');
-      callback('error', { message: 'Lost connection to server. The game session has ended.' });
+      if (!this.wasKicked) {
+        callback('error', { message: 'Lost connection to server. The game session has ended.' });
+      }
     });
   }
 
@@ -178,17 +283,20 @@ export class NetworkManager {
     }
 
     import('./gameEngine.js').then(({ createGameState }) => {
-      const playerNames = this.players.map(p => p.name);
+      const playerNames = this.players.map((p, i) => p.name || `Player ${i + 1}`);
       this.log(`Creating game state for: ${playerNames.join(', ')} on map: ${mapId}`);
 
       const state = createGameState(playerNames, mapId);
 
-      // Assign player IDs
+      // Assign game player IDs in lobby order.
       this.players.forEach((playerInfo, i) => {
         playerInfo.playerId = state.players[i].id;
+        if (!playerInfo.clientId) {
+          playerInfo.clientId = `legacy_${i}_${playerInfo.name}`;
+        }
       });
 
-      // Start game locally for host
+      // Host is index 0 in lobby order.
       this.localPlayerId = this.players[0].playerId;
       this.log(`Host is player 0: ${this.players[0].name} (ID: ${this.localPlayerId})`);
 
@@ -199,14 +307,14 @@ export class NetworkManager {
         playerIndex: 0
       });
 
-      // Build per-player assignments for the server to relay
-      const playerAssignments = this.players.slice(1).map((p, i) => ({
+      // Send per-player assignments (including clientId) to server for reconnect support.
+      const playerAssignments = this.players.map((p, i) => ({
         name: p.name,
+        clientId: p.clientId,
         localId: p.playerId,
-        playerIndex: i + 1
+        playerIndex: i
       }));
 
-      // Send stripped state to server for relay to clients
       const clientState = this.stripCardDecks(state);
       this.log(`Sending game-start to server (${JSON.stringify(clientState).length} bytes)`);
 
@@ -239,7 +347,7 @@ export class NetworkManager {
       this.log('Cannot send action - not connected', 'error');
       return;
     }
-    // Always include the sender's player ID so the host knows who sent it
+    // Always include the sender's player ID so host can attribute any-player actions.
     action.fromPlayerId = this.localPlayerId;
     this.log(`Sending action: ${action.actionType}`);
     this.socket.emit('game-action', action);
@@ -248,10 +356,15 @@ export class NetworkManager {
   sendChat(msg) {
     if (!this.socket) return;
     this.socket.emit('chat', msg);
-    // Socket.IO broadcast excludes sender, so add locally
+    // Socket.IO broadcast excludes sender, so add locally.
     if (this.callback) {
       this.callback('chat', msg);
     }
+  }
+
+  kickPlayer(playerId) {
+    if (!this.isHost || !this.socket || !playerId) return;
+    this.socket.emit('kick-player', { playerId });
   }
 
   destroy() {
@@ -262,5 +375,7 @@ export class NetworkManager {
     }
     this.players = [];
     this.localPlayerId = null;
+    this.roomCode = '';
+    this.wasKicked = false;
   }
 }
