@@ -1329,7 +1329,7 @@ body {
   top: 0;
   left: 0;
   right: 0;
-  height: clamp(4px, calc(var(--cell) * 0.07), 6px);
+  height: clamp(5px, calc(var(--cell) * 0.12), 9px);
   border-radius: 0;
   transform-origin: center top;
 }
@@ -1338,7 +1338,7 @@ body {
   bottom: 0;
   left: 0;
   right: 0;
-  height: clamp(4px, calc(var(--cell) * 0.07), 6px);
+  height: clamp(5px, calc(var(--cell) * 0.12), 9px);
   border-radius: 0;
   transform-origin: center bottom;
 }
@@ -1347,7 +1347,7 @@ body {
   left: 0;
   top: 0;
   bottom: 0;
-  width: clamp(4px, calc(var(--cell) * 0.07), 6px);
+  width: clamp(5px, calc(var(--cell) * 0.12), 9px);
   border-radius: 0;
   transform-origin: left center;
 }
@@ -1356,7 +1356,7 @@ body {
   right: 0;
   top: 0;
   bottom: 0;
-  width: clamp(4px, calc(var(--cell) * 0.07), 6px);
+  width: clamp(5px, calc(var(--cell) * 0.12), 9px);
   border-radius: 0;
   transform-origin: right center;
 }

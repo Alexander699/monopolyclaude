@@ -150,19 +150,7 @@ export function initApp() {
   });
 }
 
-// Snapshot player stats before render so we can detect changes after render
-function snapshotPlayerStats() {
-  if (!engine || !engine.state || !engine.state.players) return;
-  engine.state.players.forEach(p => {
-    prevPlayerSnapshots[p.id] = {
-      money: p.money,
-      influence: p.influence,
-      properties: p.properties.length
-    };
-  });
-}
-
-// After render, compare new stats to snapshot and inject floating change indicators
+// Compare current engine state to last-rendered snapshot and inject floating change popups
 function showPlayerChangeAnimations() {
   if (!engine || !engine.state || !engine.state.players) return;
   engine.state.players.forEach(p => {
@@ -200,12 +188,21 @@ function spawnChangePopup(anchor, text, type) {
   popup.addEventListener('animationend', () => popup.remove());
 }
 
+// Save current stats as the "last rendered" snapshot — called AFTER render + animations
+function savePlayerSnapshot() {
+  if (!engine || !engine.state || !engine.state.players) return;
+  engine.state.players.forEach(p => {
+    prevPlayerSnapshots[p.id] = {
+      money: p.money,
+      influence: p.influence,
+      properties: p.properties.length
+    };
+  });
+}
+
 function render() {
   const app = document.getElementById('app');
   if (!app) return;
-
-  // Snapshot player stats BEFORE re-render so we can detect changes
-  if (appScreen === 'game') snapshotPlayerStats();
 
   // CRITICAL: If movement animation is in progress, defer render so the
   // floating token is not destroyed by innerHTML replacement.
@@ -241,6 +238,7 @@ function render() {
       app.innerHTML = renderGame();
       attachGameEvents();
       showPlayerChangeAnimations();
+      savePlayerSnapshot();
       break;
     case 'gameover':
       app.innerHTML = renderGameOver();
