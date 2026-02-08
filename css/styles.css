@@ -25,8 +25,8 @@
   --board-border: rgba(219, 224, 255, 0.2);
   --space-bg: #2a2f4e;
   --space-border: rgba(236, 240, 255, 0.14);
-  --panel-left-w: 212px;
-  --panel-right-w: 242px;
+  --panel-left-w: 280px;
+  --panel-right-w: 320px;
   --layout-side-padding: 8px;
   --font-main: 'Segoe UI', system-ui, -apple-system, sans-serif;
   --font-mono: 'Cascadia Code', 'Fira Code', monospace;
@@ -535,9 +535,9 @@ body {
 .game-layout {
   flex: 1;
   display: grid;
-  grid-template-columns: minmax(190px, var(--panel-left-w)) 1fr minmax(220px, var(--panel-right-w));
-  gap: 4px;
-  padding: 4px;
+  grid-template-columns: var(--panel-left-w) 1fr var(--panel-right-w);
+  gap: 3px;
+  padding: 3px;
   overflow: hidden;
   min-height: 0;
   background: rgba(8, 7, 17, 0.86);
@@ -721,17 +721,13 @@ body {
 
 /* Stat change popup animations */
 .stat-change-popup {
-  position: absolute;
-  left: 105%;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 11px;
+  display: inline;
+  margin-left: 3px;
+  font-size: 10px;
   font-weight: 700;
   white-space: nowrap;
   pointer-events: none;
-  z-index: 20;
-  animation: statPopFloat 1.4s ease-out forwards;
-  text-shadow: 0 1px 3px rgba(0,0,0,0.6);
+  animation: statPopFade 1.6s ease-out forwards;
 }
 
 .stat-change-gain {
@@ -742,18 +738,18 @@ body {
   color: #f87171;
 }
 
-@keyframes statPopFloat {
+@keyframes statPopFade {
   0% {
     opacity: 1;
-    transform: translateY(-50%) translateX(0);
+    transform: translateY(0);
   }
-  70% {
+  60% {
     opacity: 1;
-    transform: translateY(-50%) translateX(6px);
+    transform: translateY(-3px);
   }
   100% {
     opacity: 0;
-    transform: translateY(-50%) translateX(12px);
+    transform: translateY(-6px);
   }
 }
 
@@ -919,11 +915,12 @@ body {
   opacity: 0.82;
 }
 
-/* Center action button (Roll Dice / End Turn) */
+/* Center action button (Roll Dice / End Turn / Buy) */
 .center-action-btn {
   margin-top: 8px;
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
 }
 
 .center-roll-btn {
@@ -2312,8 +2309,8 @@ body {
 
 @media (max-width: 1200px) {
   :root {
-    --panel-left-w: 178px;
-    --panel-right-w: 220px;
+    --panel-left-w: 230px;
+    --panel-right-w: 260px;
     --layout-side-padding: 8px;
   }
 }

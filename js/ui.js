@@ -183,7 +183,6 @@ function spawnChangePopup(anchor, text, type) {
   const popup = document.createElement('span');
   popup.className = `stat-change-popup stat-change-${type}`;
   popup.textContent = text;
-  anchor.style.position = 'relative';
   anchor.appendChild(popup);
   popup.addEventListener('animationend', () => popup.remove());
 }
@@ -871,6 +870,18 @@ function renderCenterActionButton() {
         btnHtml = `<button class="btn btn-primary btn-lg center-roll-btn" id="btn-roll-center">🎲 Roll Dice</button>`;
       }
       break;
+    case 'action': {
+      const space = engine.getSpace(currentPlayer.position);
+      if (!space.owner && ['country', 'transport', 'infrastructure'].includes(space.type)) {
+        btnHtml = `
+          <button class="btn btn-success btn-lg center-roll-btn" id="btn-buy-center" ${currentPlayer.money < space.price ? 'disabled' : ''}>
+            🏷️ Buy ${space.name} ($${space.price})
+          </button>
+          <button class="btn btn-secondary center-roll-btn" id="btn-decline-center" style="margin-top:6px;">❌ Decline</button>
+        `;
+      }
+      break;
+    }
     case 'end-turn':
       btnHtml = `<button class="btn btn-primary btn-lg center-roll-btn" id="btn-end-turn-center">⏭️ End Turn</button>`;
       break;
@@ -1116,14 +1127,7 @@ function renderActionPanel(currentPlayer, isMyTurn) {
         break;
 
       case 'action':
-        if (!space.owner && ['country', 'transport', 'infrastructure'].includes(space.type)) {
-          html += `
-            <button class="btn btn-success btn-lg" id="btn-buy" ${currentPlayer.money < space.price ? 'disabled' : ''}>
-              🏷️ Buy ${space.name} ($${space.price})
-            </button>
-            <button class="btn btn-secondary" id="btn-decline">❌ Decline</button>
-          `;
-        }
+        // Buy/Decline buttons are now on the board center
         break;
 
       // end-turn button is on the board center
@@ -1618,11 +1622,13 @@ function attachGameEvents() {
   document.getElementById('btn-roll-center')?.addEventListener('click', handleRollDice);
   document.getElementById('btn-end-turn-center')?.addEventListener('click', handleEndTurn);
 
+  // Game actions (center board buttons - buy/decline)
+  document.getElementById('btn-buy-center')?.addEventListener('click', handleBuyProperty);
+  document.getElementById('btn-decline-center')?.addEventListener('click', handleDecline);
+
   // Game actions (side panel buttons)
   document.getElementById('btn-bail')?.addEventListener('click', handlePayBail);
   document.getElementById('btn-immunity')?.addEventListener('click', handleUseImmunity);
-  document.getElementById('btn-buy')?.addEventListener('click', handleBuyProperty);
-  document.getElementById('btn-decline')?.addEventListener('click', handleDecline);
 
   // Property/Trade buttons
   document.getElementById('btn-properties')?.addEventListener('click', () => { showPropertyPanel = true; render(); });
