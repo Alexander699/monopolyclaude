@@ -864,6 +864,10 @@ export class GameEngine {
 
   proposeTrade(fromId, toId, offer) {
     // offer = { giveMoney, getMoney, giveProperties: [ids], getProperties: [ids] }
+    const from = this.getPlayerById(fromId);
+    const to = this.getPlayerById(toId);
+    if (!from || !to || fromId === toId || from.bankrupt || to.bankrupt) return false;
+
     const trade = {
       id: generateId(),
       fromId,
@@ -872,22 +876,40 @@ export class GameEngine {
       status: 'pending'
     };
     this.state.tradeOffers.push(trade);
-    const from = this.getPlayerById(fromId);
-    const to = this.getPlayerById(toId);
     this.log(`${from.name} proposes a trade to ${to.name}.`, 'trade');
     this.emit();
     return trade;
   }
 
-  acceptTrade(tradeId) {
+  acceptTrade(tradeId, playerId = null) {
     const trade = this.state.tradeOffers.find(t => t.id === tradeId);
     if (!trade || trade.status !== 'pending') return false;
 
+    const actorId = playerId || trade.toId;
+    if (actorId !== trade.toId) return false;
+
     const from = this.getPlayerById(trade.fromId);
     const to = this.getPlayerById(trade.toId);
+    if (!from || !to || from.bankrupt || to.bankrupt) return false;
 
     // Validate
     if (from.money < (trade.giveMoney || 0) || to.money < (trade.getMoney || 0)) return false;
+    const giveProperties = Array.isArray(trade.giveProperties) ? trade.giveProperties : [];
+    const getProperties = Array.isArray(trade.getProperties) ? trade.getProperties : [];
+
+    // Reject malformed trades that reference the same property in both directions
+    const overlap = giveProperties.some(spaceId => getProperties.includes(spaceId));
+    if (overlap) return false;
+
+    // Validate ownership at acceptance time to prevent stale/off-path transfers
+    for (const spaceId of giveProperties) {
+      const space = this.getSpace(spaceId);
+      if (!space || space.owner !== trade.fromId) return false;
+    }
+    for (const spaceId of getProperties) {
+      const space = this.getSpace(spaceId);
+      if (!space || space.owner !== trade.toId) return false;
+    }
 
     // Execute trade
     if (trade.giveMoney) {
@@ -899,18 +921,18 @@ export class GameEngine {
       this.adjustMoney(from, trade.getMoney);
     }
 
-    (trade.giveProperties || []).forEach(spaceId => {
+    giveProperties.forEach(spaceId => {
       const space = this.getSpace(spaceId);
       space.owner = trade.toId;
       from.properties = from.properties.filter(p => p !== spaceId);
-      to.properties.push(spaceId);
+      if (!to.properties.includes(spaceId)) to.properties.push(spaceId);
     });
 
-    (trade.getProperties || []).forEach(spaceId => {
+    getProperties.forEach(spaceId => {
       const space = this.getSpace(spaceId);
       space.owner = trade.fromId;
       to.properties = to.properties.filter(p => p !== spaceId);
-      from.properties.push(spaceId);
+      if (!from.properties.includes(spaceId)) from.properties.push(spaceId);
     });
 
     trade.status = 'accepted';
@@ -920,13 +942,18 @@ export class GameEngine {
     return true;
   }
 
-  rejectTrade(tradeId) {
+  rejectTrade(tradeId, playerId = null) {
     const trade = this.state.tradeOffers.find(t => t.id === tradeId);
-    if (trade) {
-      trade.status = 'rejected';
-      this.log(`Trade rejected.`, 'trade');
-    }
+    if (!trade || trade.status !== 'pending') return false;
+
+    const actorId = playerId || trade.toId;
+    if (actorId !== trade.toId) return false;
+
+    const to = this.getPlayerById(trade.toId);
+    trade.status = 'rejected';
+    this.log(`${to?.name || 'A player'} rejected a trade.`, 'trade');
     this.emit();
+    return true;
   }
 
   cancelTrade(tradeId, playerId) {

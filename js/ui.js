@@ -604,6 +604,9 @@ function hostOnlineGame(name) {
           if (data.state.players) {
             engine.state.players = data.state.players;
           }
+          if (engine.state.lastDice) {
+            applyAuthoritativeDice(engine.state.lastDice);
+          }
           render();
         }
         break;
@@ -690,9 +693,8 @@ function joinOnlineGame(name, code) {
           if (data.state.players) {
             engine.state.players = data.state.players;
           }
-          // Sync dice display with authoritative state from host
           if (engine.state.lastDice) {
-            diceValues = [engine.state.lastDice.d1, engine.state.lastDice.d2];
+            applyAuthoritativeDice(engine.state.lastDice);
           }
           render();
         }
@@ -911,8 +913,13 @@ function renderBoard() {
   html += `<div class="die">${getDiceFace(diceValues[1])}</div>`;
   html += `</div>`;
   // Show dice total
-  const diceTotal = diceValues[0] + diceValues[1];
-  html += `<div class="dice-total">${diceTotal > 0 ? diceTotal : ''}</div>`;
+  let diceTotal = '';
+  if (diceAnimationInProgress) {
+    diceTotal = String(diceValues[0] + diceValues[1]);
+  } else if (state.lastDice && Number.isFinite(state.lastDice.total)) {
+    diceTotal = String(state.lastDice.total);
+  }
+  html += `<div class="dice-total">${diceTotal}</div>`;
   html += '</div>';
 
   // Main action button below dice
@@ -1757,7 +1764,8 @@ function attachGameEvents() {
         network.sendAction({ actionType: 'accept-trade', tradeId });
         return;
       }
-      engine.acceptTrade(tradeId);
+      const myId = localPlayerId || engine.getCurrentPlayer().id;
+      engine.acceptTrade(tradeId, myId);
     });
   });
   document.querySelectorAll('[data-reject-trade]').forEach(btn => {
@@ -1767,7 +1775,8 @@ function attachGameEvents() {
         network.sendAction({ actionType: 'reject-trade', tradeId });
         return;
       }
-      engine.rejectTrade(tradeId);
+      const myId = localPlayerId || engine.getCurrentPlayer().id;
+      engine.rejectTrade(tradeId, myId);
     });
   });
   document.querySelectorAll('[data-cancel-trade]').forEach(btn => {
@@ -1921,30 +1930,48 @@ function handleRemoteAction(data) {
   // Use the sender's player ID for actions any player can perform (trade, property mgmt).
   // Fall back to current player for turn-based actions (roll, buy, end-turn).
   const senderId = data.fromPlayerId || engine.getCurrentPlayer().id;
+  const activePlayerId = engine.getCurrentPlayer().id;
+  const requiresActiveTurn = () => {
+    if (senderId !== activePlayerId) {
+      console.warn('[UI-HOST] Ignoring turn action from non-active player:', data.actionType, 'sender:', senderId, 'active:', activePlayerId);
+      return false;
+    }
+    return true;
+  };
 
   switch (data.actionType) {
     // --- Turn-based actions (only active player can do these) ---
     case 'roll-dice':
-      if (engine.state.phase === 'pre-roll') {
+      if (requiresActiveTurn() && engine.state.phase === 'pre-roll') {
         engine.rollDiceAction();
       }
       break;
     case 'pay-bail':
-      engine.payBail(engine.getCurrentPlayer());
+      if (requiresActiveTurn()) {
+        engine.payBail(engine.getCurrentPlayer());
+      }
       break;
     case 'use-immunity': {
-      const p = engine.getCurrentPlayer();
-      engine.useImmunityCard(p);
+      if (requiresActiveTurn()) {
+        const p = engine.getCurrentPlayer();
+        engine.useImmunityCard(p);
+      }
       break;
     }
     case 'buy-property':
-      engine.buyProperty(engine.getCurrentPlayer().id);
+      if (requiresActiveTurn()) {
+        engine.buyProperty(engine.getCurrentPlayer().id);
+      }
       break;
     case 'decline-purchase':
-      engine.declinePurchase();
+      if (requiresActiveTurn()) {
+        engine.declinePurchase();
+      }
       break;
     case 'end-turn':
-      engine.endTurn();
+      if (requiresActiveTurn()) {
+        engine.endTurn();
+      }
       break;
     case 'influence-action': {
       if (data.action === 'embargo' && data.targetId) {
@@ -1959,10 +1986,10 @@ function handleRemoteAction(data) {
       engine.proposeTrade(senderId, data.partnerId, data.offer);
       break;
     case 'accept-trade':
-      engine.acceptTrade(data.tradeId);
+      engine.acceptTrade(data.tradeId, senderId);
       break;
     case 'reject-trade':
-      engine.rejectTrade(data.tradeId);
+      engine.rejectTrade(data.tradeId, senderId);
       break;
     case 'cancel-trade':
       engine.cancelTrade(data.tradeId, senderId);
@@ -2032,17 +2059,16 @@ function handleRollDice() {
     const animInterval = setInterval(() => {
       diceValues = [Math.floor(Math.random() * 6) + 1, Math.floor(Math.random() * 6) + 1];
       rolls++;
-      const diceDisplay = document.querySelector('.dice-display');
-      if (diceDisplay) {
-        diceDisplay.innerHTML = `<div class="die">${getDiceFace(diceValues[0])}</div><div class="die">${getDiceFace(diceValues[1])}</div>`;
-        diceDisplay.classList.add('rolling');
-      }
+      renderDiceFaceAndTotal(true);
       if (rolls >= 10) {
         clearInterval(animInterval);
         animatingDice = false;
         diceAnimationInProgress = false;
-        const diceEl = document.querySelector('.dice-display');
-        if (diceEl) diceEl.classList.remove('rolling');
+        if (engine?.state?.lastDice) {
+          applyAuthoritativeDice(engine.state.lastDice);
+        } else {
+          renderDiceFaceAndTotal(false, '');
+        }
         // State update from host will trigger render with actual dice values
       }
     }, 80);
@@ -2063,31 +2089,21 @@ function handleRollDice() {
     ];
     rolls++;
 
-    // Only update dice display, not full render (to avoid losing event handlers)
-    const diceDisplay = document.querySelector('.dice-display');
-    if (diceDisplay) {
-      diceDisplay.innerHTML = `
-        <div class="die">${getDiceFace(diceValues[0])}</div>
-        <div class="die">${getDiceFace(diceValues[1])}</div>
-      `;
-      diceDisplay.classList.add('rolling');
-    }
+    // Only update dice display/total, not full render (to avoid losing event handlers)
+    renderDiceFaceAndTotal(true);
 
     if (rolls >= 10) {
       clearInterval(animInterval);
       animatingDice = false;
 
       // Remove rolling class immediately
-      const diceEl = document.querySelector('.dice-display');
-      if (diceEl) {
-        diceEl.classList.remove('rolling');
-      }
+      renderDiceFaceAndTotal(false);
 
       // Now actually roll in the engine
       try {
         const result = engine.rollDiceAction();
         if (result) {
-          diceValues = [result.d1, result.d2];
+          applyAuthoritativeDice(result);
         }
       } catch (error) {
         console.error('[DICE] Error in rollDiceAction:', error);
@@ -2287,6 +2303,9 @@ function handleLoadGame() {
 function handleAnimation(type, data) {
   switch (type) {
     case 'dice':
+      if (data) {
+        applyAuthoritativeDice(data);
+      }
       sound.playDiceRoll();
       break;
     case 'move':
@@ -2433,6 +2452,30 @@ function animatePlayerMovement(playerId, fromPos, toPos) {
 }
 
 // ---- Helpers ----
+
+function renderDiceFaceAndTotal(isRolling = false, totalOverride = null) {
+  const diceDisplay = document.querySelector('.dice-display');
+  if (diceDisplay) {
+    diceDisplay.innerHTML = `
+      <div class="die">${getDiceFace(diceValues[0])}</div>
+      <div class="die">${getDiceFace(diceValues[1])}</div>
+    `;
+    if (isRolling) diceDisplay.classList.add('rolling');
+    else diceDisplay.classList.remove('rolling');
+  }
+
+  const diceTotalEl = document.querySelector('.dice-total');
+  if (diceTotalEl) {
+    const total = totalOverride === null ? (diceValues[0] + diceValues[1]) : totalOverride;
+    diceTotalEl.textContent = Number.isFinite(total) ? String(total) : '';
+  }
+}
+
+function applyAuthoritativeDice(dice) {
+  if (!dice || !Number.isFinite(dice.d1) || !Number.isFinite(dice.d2)) return;
+  diceValues = [dice.d1, dice.d2];
+  renderDiceFaceAndTotal(false, Number.isFinite(dice.total) ? dice.total : (dice.d1 + dice.d2));
+}
 
 function getDiceFace(value) {
   const faces = ['', '⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
