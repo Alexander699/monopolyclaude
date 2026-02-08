@@ -803,7 +803,6 @@ function renderGame() {
 }
 
 function renderPlayerCard(player, isCurrent) {
-  const wealth = engine.calculateTotalWealth(player);
   const influencePercent = Math.min(100, (player.influence / INFLUENCE_TO_WIN) * 100);
   const isHostAdmin = !!(network && network.isHost && localPlayerId);
   const canKickPlayer = isHostAdmin && player.id !== localPlayerId && !player.bankrupt;
@@ -829,10 +828,6 @@ function renderPlayerCard(player, isCurrent) {
         <div class="stat">
           <span class="stat-label">Properties</span>
           <span class="stat-value stat-change-anchor-props">${player.properties.length}</span>
-        </div>
-        <div class="stat">
-          <span class="stat-label">Wealth</span>
-          <span class="stat-value">$${wealth.toLocaleString()}</span>
         </div>
         <div class="stat influence-stat">
           <span class="stat-label">Influence</span>
@@ -922,6 +917,14 @@ function renderBoard() {
 
   // Main action button below dice
   html += renderCenterActionButton();
+
+  // Recent Activity mini-log in board center
+  const recentLogs = state.log.slice(-4).reverse();
+  if (recentLogs.length > 0) {
+    html += `<div class="center-mini-log">`;
+    html += recentLogs.map(l => `<div class="center-log-entry log-${l.type}">${l.message}</div>`).join('');
+    html += `</div>`;
+  }
 
   html += '</div>';
 
@@ -1193,17 +1196,7 @@ function renderActionPanel(currentPlayer, isMyTurn) {
   }
 
   // (Properties and Trade buttons are already in the Management section above)
-
-  // Mini log (last 5 entries)
-  const recentLogs = state.log.slice(-5).reverse();
-  if (recentLogs.length > 0) {
-    html += `
-      <div class="mini-log">
-        <h4>Recent Activity</h4>
-        ${recentLogs.map(l => `<div class="mini-log-entry log-${l.type}">${l.message}</div>`).join('')}
-      </div>
-    `;
-  }
+  // Recent Activity is now shown in the board center area
 
   html += '</div>';
   return html;
