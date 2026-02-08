@@ -229,7 +229,28 @@ Player avatars are defined in `js/gameData.js` in the `PLAYER_AVATARS` array. Ea
 
 ## Recent Changes (Latest First)
 
-### v1.5 - Multiplayer Session Recovery, Moderation & Sync (Current)
+### v1.5.2 - Board Visual Cohesion, Sizing, and Text Consistency (Current)
+- **Connected board ring:** board tile gap is now `0` and edge tiles render as a continuous frame instead of separated cards.
+- **Corner-aware rounding:** `renderBoard()` now assigns directional corner classes (`corner-br`, `corner-bl`, `corner-tl`, `corner-tr`) so only true outer corners are rounded.
+- **Center turn copy update:** center status text now reads "`[player] is playing...`" for a cleaner board-center presentation.
+- **Board footprint enlarged:** gameplay layout padding/gaps were reduced and board sizing was expanded (`--board-s: var(--board-size)`, desktop `--avail-h: calc(100vh - 8px)`), reducing unused left/right/top/bottom space.
+- **Panel width rebalance for board space:** desktop side panel vars were tightened (`--panel-left-w: 212px`, `--panel-right-w: 242px`) to free horizontal room for the square board.
+- **Uniform tile typography:** corner labels, city/tile names, and tile prices now use the same font family (`var(--font-main)`) and the same scale basis (`clamp(7px, calc(var(--cell) * 0.15), 11px)`).
+- **Removed side-only text size overrides:** left/right edge tiles no longer use smaller text than top/bottom tiles, fixing inconsistent cell typography.
+- **Flag overlap fix near center:** lowered center board stacking priority so inner-edge flag badges are no longer clipped under the central board area.
+- **Board tile readability polish:** maintained single-line vs multi-line naming classes while improving consistent truncation/wrapping behavior for long labels.
+
+### v1.5.1 - Board UI Layout and Label Readability
+- **Top bar removed from gameplay UI:** the old header row ("Global Economic Wars", round/turn, current player, utility icons) was removed to free vertical space and simplify the layout.
+- **Utility controls moved to left panel footer:** sound, music, log, and save buttons now render at the bottom of the left player panel.
+- **Turn indicator moved to board center:** the active player badge now appears in the board center (near dice), including sanctions status when applicable.
+- **City-name readability fix (no awkward word splits):** single-word names stay on one line (`space-name-single`) and multi-word names can wrap up to 2 lines (`space-name-multi`).
+- **Name truncation behavior improved:** removed forced ellipsis-style clipping that produced labels like `San...`; text sizing and wrapping were retuned for cleaner city labels.
+- **Player token overlap pass:** token placement was shifted toward tile edges and token size was increased again to improve visibility while reducing overlap with city names.
+- **Board height recalibrated after top-bar removal:** desktop board available height now uses `--avail-h: calc(100vh - 8px)` (instead of a top-bar-dependent value).
+- **Left panel structure updated:** player list is now a scrollable body (`.player-panel-list`) with a fixed footer (`.player-panel-footer`) for round/turn text and utility controls.
+
+### v1.5 - Multiplayer Session Recovery, Moderation & Sync
 - **Trade initiator fix (host local send path):** `handleSendTrade()` now uses `localPlayerId` in online mode. This fixes incorrect trade headers like "Player 2 → Player 2" when another player initiates trade out-of-turn.
 - **Chat scoped per room:** chat history storage moved from a global key to room-specific keys (`gew_chatHistory_<ROOMCODE>`), preventing old-lobby chat bleed into unrelated games.
 - **Session cleanup hardening:** creating/joining/new-game now calls network cleanup before opening a new session path, avoiding stale socket listeners across matches.

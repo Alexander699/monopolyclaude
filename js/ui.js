@@ -368,7 +368,7 @@ function renderLobby() {
               </div>
               <div class="rule-item">
                 <span class="rule-icon">🏗️</span>
-                <span>Develop countries through 4 tiers</span>
+                <span>Develop cities through 4 tiers</span>
               </div>
             </div>
           </div>
@@ -689,31 +689,22 @@ function renderGame() {
 
   return `
     <div class="game-screen">
-      <!-- Top Bar -->
-      <div class="top-bar">
-        <div class="top-bar-left">
-          <span class="game-title">🌍 Global Economic Wars</span>
-          <span class="turn-info">Round ${state.roundNumber} · Turn ${state.turnNumber}</span>
-        </div>
-        <div class="top-bar-center">
-          <div class="current-player-indicator" style="border-color:${currentPlayer.color}">
-            <span>${getAvatarHtml(currentPlayer.avatar, 24)} ${currentPlayer.name}'s Turn</span>
-            ${currentPlayer.inSanctions ? '<span class="sanctions-badge">⛔ Sanctioned</span>' : ''}
-          </div>
-        </div>
-        <div class="top-bar-right">
-          <button class="icon-btn" id="btn-sound" title="Toggle Sound">${sound.enabled ? '🔊' : '🔇'}</button>
-          <button class="icon-btn" id="btn-music" title="Toggle Music">${sound.musicEnabled ? '🎵' : '🎵'}</button>
-          <button class="icon-btn" id="btn-log" title="Full Game Log">📋</button>
-          <button class="icon-btn" id="btn-save" title="Save Game">💾</button>
-        </div>
-      </div>
-
       <!-- Main Layout -->
       <div class="game-layout">
         <!-- Player Panel (Left) -->
         <div class="player-panel">
-          ${state.players.map(p => renderPlayerCard(p, currentPlayer.id === p.id)).join('')}
+          <div class="player-panel-list">
+            ${state.players.map(p => renderPlayerCard(p, currentPlayer.id === p.id)).join('')}
+          </div>
+          <div class="player-panel-footer">
+            <div class="player-panel-round">Round ${state.roundNumber} · Turn ${state.turnNumber}</div>
+            <div class="player-panel-tools">
+              <button class="icon-btn player-tool-btn" id="btn-sound" title="Toggle Sound">${sound.enabled ? '🔊' : '🔇'}</button>
+              <button class="icon-btn player-tool-btn" id="btn-music" title="Toggle Music">${sound.musicEnabled ? '🎵' : '🎵'}</button>
+              <button class="icon-btn player-tool-btn" id="btn-log" title="Full Game Log">📋</button>
+              <button class="icon-btn player-tool-btn" id="btn-save" title="Save Game">💾</button>
+            </div>
+          </div>
         </div>
 
         <!-- Board (Center) -->
@@ -849,11 +840,20 @@ function renderCenterActionButton() {
 
 function renderBoard() {
   const state = engine.state;
+  const currentPlayer = engine.getCurrentPlayer();
   const boardClass = state.gridSize === 13 ? 'board board-13' : 'board';
   let html = `<div class="${boardClass}">`;
 
   // Render center area - dice centered prominently
   html += '<div class="board-center">';
+
+  // Current turn indicator in the center area
+  html += `<div class="center-turn-indicator" style="border-color:${currentPlayer.color}">`;
+  html += `<span class="center-turn-main">${getAvatarHtml(currentPlayer.avatar, 22)} ${currentPlayer.name} is playing...</span>`;
+  if (currentPlayer.inSanctions) {
+    html += `<span class="sanctions-badge center-sanctions-badge">⛔ Sanctioned</span>`;
+  }
+  html += `</div>`;
 
   // Dice display - centered and prominent
   html += '<div class="center-dice-area">';
@@ -870,12 +870,6 @@ function renderBoard() {
   // Main action button below dice
   html += renderCenterActionButton();
 
-  // Small game title below action button
-  html += '<div class="center-branding">';
-  html += '<div class="center-logo">🌍</div>';
-  html += '<div class="center-title-mini">Global Economic Wars</div>';
-  html += '</div>';
-
   html += '</div>';
 
   // Render all spaces (dynamic based on map)
@@ -885,6 +879,13 @@ function renderBoard() {
     const space = state.board[i];
     const pos = getSpacePosition(i);
     const isCorner = corners.includes(i);
+    let cornerClass = '';
+    if (isCorner) {
+      if (i === corners[0]) cornerClass = 'corner-br';
+      else if (i === corners[1]) cornerClass = 'corner-bl';
+      else if (i === corners[2]) cornerClass = 'corner-tl';
+      else if (i === corners[3]) cornerClass = 'corner-tr';
+    }
 
     // Determine side for orientation based on corner positions
     let side;
@@ -896,16 +897,24 @@ function renderBoard() {
     // Players on this space
     const playersHere = state.players.filter(p => !p.bankrupt && p.position === i);
 
-    // Alliance color
-    const alliance = space.alliance ? ALLIANCES[space.alliance] : null;
+    const unownedCityClass = space.type === 'country' && !space.owner ? 'city-unowned' : '';
+    const subtypeClass = space.subtype
+      ? `space-subtype-${String(space.subtype).toLowerCase().replace(/[^a-z0-9_-]/g, '-')}`
+      : '';
+    const isSelected = selectedSpaceInfo === i ? 'is-selected' : '';
+    const isOwned = space.owner ? 'is-owned' : '';
+    const hasPlayersClass = playersHere.length > 0 ? 'has-players' : '';
+    const spaceClasses = ['space', `space-${side}`, isCorner ? 'corner' : '', cornerClass, space.type, subtypeClass, unownedCityClass, isSelected, isOwned, hasPlayersClass]
+      .filter(Boolean)
+      .join(' ');
 
-    html += `<div class="space space-${side} ${isCorner ? 'corner' : ''} ${space.type}"
+    html += `<div class="${spaceClasses}"
                   style="grid-row:${pos.row + 1};grid-column:${pos.col + 1};"
                   data-space-id="${i}">`;
 
-    // Color bar for countries
-    if (alliance) {
-      html += `<div class="space-color-bar" style="background:${alliance.color}"></div>`;
+    // Flag badges indicate city grouping instead of alliance color bars
+    if (space.type === 'country' && space.flag) {
+      html += `<div class="space-group-flag">${getFlagHtml(space.flag)}</div>`;
     }
 
     // Space content
@@ -945,7 +954,7 @@ function renderBoard() {
     if (playersHere.length > 0) {
       html += `<div class="player-tokens">`;
       playersHere.forEach(p => {
-        html += `<div class="player-token" data-player="${p.id}" style="background:${p.color}" title="${p.name}">${getAvatarHtml(p.avatar, 26)}</div>`;
+        html += `<div class="player-token" data-player="${p.id}" style="background:${p.color};color:${p.color}" title="${p.name}">${getAvatarHtml(p.avatar, 28)}</div>`;
       });
       html += `</div>`;
     }
@@ -968,46 +977,49 @@ function renderCornerSpace(space) {
 
 function renderRegularSpace(space, side) {
   let content = '';
+  const spaceName = String(space.name || '');
+  const nameClass = (spaceName.includes(' ') || spaceName.length > 10)
+    ? 'space-name space-name-multi'
+    : 'space-name space-name-single';
 
   switch (space.type) {
     case 'country':
       content = `
-        <div class="space-flag">${getFlagHtml(space.flag)}</div>
-        <div class="space-name">${space.name}</div>
+        <div class="${nameClass}">${space.name}</div>
         <div class="space-price">${space.owner ? '' : '$' + space.price}</div>
       `;
       break;
     case 'transport':
       content = `
-        <div class="space-icon">${space.icon}</div>
-        <div class="space-name">${space.name}</div>
+        <div class="space-icon space-transport-badge">${space.icon}</div>
+        <div class="${nameClass}">${space.name}</div>
         <div class="space-price">${space.owner ? '' : '$' + space.price}</div>
       `;
       break;
     case 'infrastructure':
       content = `
         <div class="space-icon">${space.icon}</div>
-        <div class="space-name">${space.name}</div>
+        <div class="${nameClass}">${space.name}</div>
         <div class="space-price">${space.owner ? '' : '$' + space.price}</div>
       `;
       break;
     case 'card':
       content = `
         <div class="space-icon">${space.icon}</div>
-        <div class="space-name">${space.name}</div>
+        <div class="${nameClass}">${space.name}</div>
       `;
       break;
     case 'tax':
       content = `
         <div class="space-icon">${space.icon}</div>
-        <div class="space-name">${space.name}</div>
+        <div class="${nameClass}">${space.name}</div>
         <div class="space-price">$${space.amount}</div>
       `;
       break;
     default:
       content = `
         <div class="space-icon">${space.icon || ''}</div>
-        <div class="space-name">${space.name}</div>
+        <div class="${nameClass}">${space.name}</div>
       `;
   }
 
@@ -1088,7 +1100,7 @@ function renderActionPanel(currentPlayer, isMyTurn) {
         <div style="background: rgba(34,197,94,0.15); border: 1px solid var(--success); border-radius: var(--radius-sm); padding: 10px; text-align: center;">
           <div style="font-size: 20px; margin-bottom: 4px;">🎁</div>
           <div style="font-weight: 700; color: var(--success); font-size: 13px;">Free Development Upgrade Available!</div>
-          <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">Open Properties to choose which country to upgrade for free.</div>
+          <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">Open Properties to choose which city to upgrade for free.</div>
         </div>
       `;
     }
@@ -1553,7 +1565,7 @@ function renderGameOver() {
 // ---- Event Attachments ----
 
 function attachGameEvents() {
-  // Top bar buttons
+  // Utility buttons
   document.getElementById('btn-sound')?.addEventListener('click', () => { sound.toggle(); render(); });
   document.getElementById('btn-music')?.addEventListener('click', () => { sound.toggleMusic(); render(); });
   document.getElementById('btn-log')?.addEventListener('click', () => { showLogPanel = !showLogPanel; render(); });
@@ -2296,13 +2308,14 @@ function animatePlayerMovement(playerId, fromPos, toPos) {
   // Create a floating token that will slide across the board
   const floater = document.createElement('div');
   floater.className = 'player-token-floater';
-  floater.innerHTML = getAvatarHtml(player.avatar, 30);
+  floater.innerHTML = getAvatarHtml(player.avatar, 28);
   floater.style.cssText = `
     position: absolute;
     width: 30px; height: 30px;
     border-radius: 50%;
     background: ${player.color};
-    border: 2px solid rgba(255,255,255,0.9);
+    border: 2.5px solid ${player.color};
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.4), 0 2px 8px rgba(0,0,0,0.6);
     display: flex; align-items: center; justify-content: center;
     font-size: 16px;
     z-index: 100;
