@@ -229,7 +229,15 @@ Player avatars are defined in `js/gameData.js` in the `PLAYER_AVATARS` array. Ea
 
 ## Recent Changes (Latest First)
 
-### v1.5.2 - Board Visual Cohesion, Sizing, and Text Consistency (Current)
+### v1.5.3 - Player Panel Polish, Token Contours & Ownership Indicators (Current)
+- **Player avatar colored contour:** board tokens now have a 2.5px colored border matching the player's color (via `currentColor`) with a dark inset shadow for contrast, replacing the old plain white border.
+- **Player panel streamlined:** removed the property flags mini-section (`player-properties-mini` / `prop-dot`) from player cards — property ownership is already visible on the board via ownership indicators.
+- **Stat change animations:** when a player gains or loses money, influence, or properties, a floating popup (green `+$X` / red `-$X`) appears next to the stat value and fades out. Uses `prevPlayerSnapshots` to diff before/after each render.
+- **Ownership indicator redesign:** changed from pill-shaped (`border-radius: 999px`, inset 2px) to flush rectangular bars that fill the full edge of the tile (`border-radius: 0`, `top/bottom/left/right: 0`). Thinner profile (`clamp(4px, 0.07*cell, 6px)`) for a cleaner look.
+- **Player token positioning fix:** removed the offset transforms that pushed tokens 30-32% outside tile boundaries; tokens now stay fully within their tile. Token container uses `overflow: hidden` to prevent spillover.
+- **Player card `data-player-id` attribute:** each `.player-card` now has `data-player-id="${player.id}"` for targeted DOM queries (used by stat change animations).
+
+### v1.5.2 - Board Visual Cohesion, Sizing, and Text Consistency
 - **Connected board ring:** board tile gap is now `0` and edge tiles render as a continuous frame instead of separated cards.
 - **Corner-aware rounding:** `renderBoard()` now assigns directional corner classes (`corner-br`, `corner-bl`, `corner-tl`, `corner-tr`) so only true outer corners are rounded.
 - **Center turn copy update:** center status text now reads "`[player] is playing...`" for a cleaner board-center presentation.
@@ -401,7 +409,8 @@ Player avatars are defined in `js/gameData.js` in the `PLAYER_AVATARS` array. Ea
 - `renderBoard()` - Dynamic NxN CSS grid board; applies `.board-13` class for expanded map
 - `renderCenterActionButton()` - Renders Roll Dice / End Turn button in the board center below dice
 - `renderSpaceInfoModal()` - Renders detailed space info popup when a board cell is clicked
-- `renderPlayerCard()` - Player info panels
+- `renderPlayerCard()` - Player info panels (cash, properties count, wealth, influence bar; no property flag icons)
+- `snapshotPlayerStats()` / `showPlayerChangeAnimations()` - Diff-based floating popup system for stat changes
 - `renderActionPanel()` - Context-sensitive actions with trade notification badge (bail/immunity only; roll/end turn moved to center)
 - `renderPropertyPanel()` - Uses local player (not current turn player) in online mode
 - `renderTradePanel()` - Uses local player in online mode
@@ -415,7 +424,7 @@ Player avatars are defined in `js/gameData.js` in the `PLAYER_AVATARS` array. Ea
 - `handleHostPlayerConnection()` - Host-side disconnect/reconnect state handling
 - `handleKickPlayer()` / `handleHostPlayerKicked()` - Host moderation actions and post-kick game-state handling
 - `handleLoadGame()` - Loads saved game with backwards compatibility for pre-map saves
-- **State variables**: `selectedMapId` (lobby map choice), `selectedSpaceInfo` (space info modal)
+- **State variables**: `selectedMapId` (lobby map choice), `selectedSpaceInfo` (space info modal), `prevPlayerSnapshots` (previous money/influence/property counts for change animations)
 - Debug tools at bottom (window.enableDebug(), window.debug.*)
 
 ### network.js (Socket.IO Client)

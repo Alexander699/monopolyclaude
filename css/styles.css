@@ -719,27 +719,42 @@ body {
   transition: width 0.5s ease;
 }
 
-.player-properties-mini {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 3px;
-  margin-top: 6px;
+/* Stat change popup animations */
+.stat-change-popup {
+  position: absolute;
+  left: 105%;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 20;
+  animation: statPopFloat 1.4s ease-out forwards;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.6);
 }
 
-.prop-dot {
-  width: 22px;
-  height: 18px;
-  border-radius: 3px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 10px;
+.stat-change-gain {
+  color: #4ade80;
 }
 
-.prop-dot.more {
-  background: var(--bg-hover);
-  color: var(--text-muted);
-  font-size: 9px;
+.stat-change-loss {
+  color: #f87171;
+}
+
+@keyframes statPopFloat {
+  0% {
+    opacity: 1;
+    transform: translateY(-50%) translateX(0);
+  }
+  70% {
+    opacity: 1;
+    transform: translateY(-50%) translateX(6px);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-50%) translateX(12px);
+  }
 }
 
 /* ---- Board ---- */
@@ -1304,45 +1319,45 @@ body {
   z-index: 4;
   background: currentColor;
   pointer-events: none;
-  opacity: 0.96;
+  opacity: 0.92;
   box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.15),
-    0 4px 10px rgba(0, 0, 0, 0.42);
+    inset 0 0 0 1px rgba(255, 255, 255, 0.12),
+    0 0 6px rgba(0, 0, 0, 0.35);
 }
 
 .space-top .owner-indicator {
-  top: 2px;
-  left: 2px;
-  right: 2px;
-  height: clamp(9px, calc(var(--corner) * 0.18), 16px);
-  border-radius: 999px;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: clamp(4px, calc(var(--cell) * 0.07), 6px);
+  border-radius: 0;
   transform-origin: center top;
 }
 
 .space-bottom .owner-indicator {
-  bottom: 2px;
-  left: 2px;
-  right: 2px;
-  height: clamp(9px, calc(var(--corner) * 0.18), 16px);
-  border-radius: 999px;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: clamp(4px, calc(var(--cell) * 0.07), 6px);
+  border-radius: 0;
   transform-origin: center bottom;
 }
 
 .space-left .owner-indicator {
-  left: 2px;
-  top: 2px;
-  bottom: 2px;
-  width: clamp(9px, calc(var(--corner) * 0.18), 16px);
-  border-radius: 999px;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: clamp(4px, calc(var(--cell) * 0.07), 6px);
+  border-radius: 0;
   transform-origin: left center;
 }
 
 .space-right .owner-indicator {
-  right: 2px;
-  top: 2px;
-  bottom: 2px;
-  width: clamp(9px, calc(var(--corner) * 0.18), 16px);
-  border-radius: 999px;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: clamp(4px, calc(var(--cell) * 0.07), 6px);
+  border-radius: 0;
   transform-origin: right center;
 }
 /* Only animate when newly purchased */

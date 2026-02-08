@@ -89,6 +89,7 @@ let selectedPropertyForDev = null;
 let selectedSpaceInfo = null; // Space ID for info modal (null = hidden)
 let selectedMapId = 'classic'; // Map selection (classic or expanded)
 let knownOwners = new Set(); // Track space IDs with known ownership (prevents animation replay)
+let prevPlayerSnapshots = {}; // Track previous money/influence/property counts for change animations
 
 // ---- Board Layout Helpers ----
 // Board is NxN grid (11x11 for classic, 13x13 for expanded). Spaces go clockwise:
@@ -149,9 +150,62 @@ export function initApp() {
   });
 }
 
+// Snapshot player stats before render so we can detect changes after render
+function snapshotPlayerStats() {
+  if (!engine || !engine.state || !engine.state.players) return;
+  engine.state.players.forEach(p => {
+    prevPlayerSnapshots[p.id] = {
+      money: p.money,
+      influence: p.influence,
+      properties: p.properties.length
+    };
+  });
+}
+
+// After render, compare new stats to snapshot and inject floating change indicators
+function showPlayerChangeAnimations() {
+  if (!engine || !engine.state || !engine.state.players) return;
+  engine.state.players.forEach(p => {
+    const prev = prevPlayerSnapshots[p.id];
+    if (!prev) return;
+
+    const moneyDiff = p.money - prev.money;
+    const influenceDiff = p.influence - prev.influence;
+    const propDiff = p.properties.length - prev.properties;
+
+    const card = document.querySelector(`.player-card[data-player-id="${p.id}"]`);
+    if (!card) return;
+
+    if (moneyDiff !== 0) {
+      const target = card.querySelector('.stat-change-anchor-money');
+      if (target) spawnChangePopup(target, moneyDiff > 0 ? `+$${moneyDiff.toLocaleString()}` : `-$${Math.abs(moneyDiff).toLocaleString()}`, moneyDiff > 0 ? 'gain' : 'loss');
+    }
+    if (influenceDiff !== 0) {
+      const target = card.querySelector('.stat-change-anchor-influence');
+      if (target) spawnChangePopup(target, influenceDiff > 0 ? `+${influenceDiff}` : `${influenceDiff}`, influenceDiff > 0 ? 'gain' : 'loss');
+    }
+    if (propDiff !== 0) {
+      const target = card.querySelector('.stat-change-anchor-props');
+      if (target) spawnChangePopup(target, propDiff > 0 ? `+${propDiff}` : `${propDiff}`, propDiff > 0 ? 'gain' : 'loss');
+    }
+  });
+}
+
+function spawnChangePopup(anchor, text, type) {
+  const popup = document.createElement('span');
+  popup.className = `stat-change-popup stat-change-${type}`;
+  popup.textContent = text;
+  anchor.style.position = 'relative';
+  anchor.appendChild(popup);
+  popup.addEventListener('animationend', () => popup.remove());
+}
+
 function render() {
   const app = document.getElementById('app');
   if (!app) return;
+
+  // Snapshot player stats BEFORE re-render so we can detect changes
+  if (appScreen === 'game') snapshotPlayerStats();
 
   // CRITICAL: If movement animation is in progress, defer render so the
   // floating token is not destroyed by innerHTML replacement.
@@ -186,6 +240,7 @@ function render() {
     case 'game':
       app.innerHTML = renderGame();
       attachGameEvents();
+      showPlayerChangeAnimations();
       break;
     case 'gameover':
       app.innerHTML = renderGameOver();
@@ -759,7 +814,7 @@ function renderPlayerCard(player, isCurrent) {
 
   return `
     <div class="player-card ${isCurrent ? 'current' : ''} ${player.bankrupt ? 'bankrupt' : ''}"
-         style="border-left: 4px solid ${player.color}">
+         style="border-left: 4px solid ${player.color}" data-player-id="${player.id}">
       <div class="player-card-header">
         <span class="player-avatar-small" style="background:${player.color}">${getAvatarHtml(player.avatar, 28)}</span>
         <div class="player-card-name">
@@ -772,11 +827,11 @@ function renderPlayerCard(player, isCurrent) {
       <div class="player-card-stats">
         <div class="stat">
           <span class="stat-label">Cash</span>
-          <span class="stat-value money">$${player.money.toLocaleString()}</span>
+          <span class="stat-value money stat-change-anchor-money">$${player.money.toLocaleString()}</span>
         </div>
         <div class="stat">
           <span class="stat-label">Properties</span>
-          <span class="stat-value">${player.properties.length}</span>
+          <span class="stat-value stat-change-anchor-props">${player.properties.length}</span>
         </div>
         <div class="stat">
           <span class="stat-label">Wealth</span>
@@ -784,7 +839,7 @@ function renderPlayerCard(player, isCurrent) {
         </div>
         <div class="stat influence-stat">
           <span class="stat-label">Influence</span>
-          <span class="stat-value">${player.influence}/${INFLUENCE_TO_WIN}</span>
+          <span class="stat-value stat-change-anchor-influence">${player.influence}/${INFLUENCE_TO_WIN}</span>
           <div class="influence-bar">
             <div class="influence-fill" style="width:${influencePercent}%;background:${player.color}"></div>
           </div>
@@ -793,17 +848,6 @@ function renderPlayerCard(player, isCurrent) {
       ${canKickPlayer ? `
         <div class="player-admin-actions">
           <button class="btn btn-xs btn-danger" data-kick-player="${player.id}">${kickLabel}</button>
-        </div>
-      ` : ''}
-      ${player.properties.length > 0 ? `
-        <div class="player-properties-mini">
-          ${player.properties.slice(0, 8).map(pid => {
-            const s = engine.getSpace(pid);
-            const a = ALLIANCES[s.alliance];
-            const flagOrIcon = s.flag ? getFlagHtml(s.flag) : (s.icon || '');
-            return `<span class="prop-dot" style="background:${a ? a.color : '#666'}" title="${s.name}">${flagOrIcon}</span>`;
-          }).join('')}
-          ${player.properties.length > 8 ? `<span class="prop-dot more">+${player.properties.length - 8}</span>` : ''}
         </div>
       ` : ''}
     </div>
