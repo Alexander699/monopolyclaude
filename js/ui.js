@@ -918,12 +918,14 @@ function renderBoard() {
   // Main action button below dice
   html += renderCenterActionButton();
 
-  // Recent Activity mini-log in board center
-  const recentLogs = state.log.slice(-4).reverse();
+  // Recent Activity mini-log in board center (scrollable)
+  const recentLogs = state.log.slice(-20).reverse();
   if (recentLogs.length > 0) {
     html += `<div class="center-mini-log">`;
+    html += `<div class="center-mini-log-header">Recent Activity</div>`;
+    html += `<div class="center-mini-log-scroll">`;
     html += recentLogs.map(l => `<div class="center-log-entry log-${l.type}">${l.message}</div>`).join('');
-    html += `</div>`;
+    html += `</div></div>`;
   }
 
   html += '</div>';
@@ -1375,6 +1377,7 @@ function renderTradePanel() {
                 const from = engine.getPlayerById(trade.fromId);
                 const to = engine.getPlayerById(trade.toId);
                 const canAccept = trade.toId === currentPlayer.id;
+                const canCancel = trade.fromId === currentPlayer.id;
                 return `
                   <div class="trade-offer-card">
                     <div class="toc-header">${from.name} → ${to.name}</div>
@@ -1388,6 +1391,11 @@ function renderTradePanel() {
                       <div class="toc-actions">
                         <button class="btn btn-sm btn-success" data-accept-trade="${trade.id}">✅ Accept</button>
                         <button class="btn btn-sm btn-danger" data-reject-trade="${trade.id}">❌ Reject</button>
+                      </div>
+                    ` : ''}
+                    ${canCancel ? `
+                      <div class="toc-actions">
+                        <button class="btn btn-sm btn-warning" data-cancel-trade="${trade.id}">↩️ Withdraw Offer</button>
                       </div>
                     ` : ''}
                   </div>
@@ -1762,6 +1770,17 @@ function attachGameEvents() {
       engine.rejectTrade(tradeId);
     });
   });
+  document.querySelectorAll('[data-cancel-trade]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tradeId = btn.dataset.cancelTrade;
+      const myId = localPlayerId || engine.getCurrentPlayer().id;
+      if (isOnlineClient()) {
+        network.sendAction({ actionType: 'cancel-trade', tradeId });
+        return;
+      }
+      engine.cancelTrade(tradeId, myId);
+    });
+  });
 
   // Host moderation: kick players
   document.querySelectorAll('[data-kick-player]').forEach(btn => {
@@ -1944,6 +1963,9 @@ function handleRemoteAction(data) {
       break;
     case 'reject-trade':
       engine.rejectTrade(data.tradeId);
+      break;
+    case 'cancel-trade':
+      engine.cancelTrade(data.tradeId, senderId);
       break;
     case 'develop-property':
       engine.developProperty(senderId, data.spaceId);

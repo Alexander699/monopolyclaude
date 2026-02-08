@@ -929,6 +929,17 @@ export class GameEngine {
     this.emit();
   }
 
+  cancelTrade(tradeId, playerId) {
+    const trade = this.state.tradeOffers.find(t => t.id === tradeId);
+    if (!trade || trade.status !== 'pending') return false;
+    if (trade.fromId !== playerId) return false;
+    trade.status = 'cancelled';
+    const from = this.getPlayerById(trade.fromId);
+    this.log(`${from.name} withdrew their trade offer.`, 'trade');
+    this.emit();
+    return true;
+  }
+
   // ---- Influence Actions ----
 
   useInfluenceAction(playerId, action, targetId) {

@@ -186,12 +186,14 @@ Countries produce: oil, tech, agriculture, tourism
 ## UI Features
 
 ### Center Board Controls
-The Roll Dice and End Turn buttons are displayed in the center of the board, below the dice display, rather than in the side panel. This makes them the focal point of gameplay:
+The main action buttons are displayed in the center of the board, below the dice display, making them the focal point of gameplay:
 - **Roll Dice / Roll for Doubles** button — appears during `pre-roll` phase
+- **Buy / Decline** buttons — appear during `action` phase when landing on an unowned property
 - **End Turn** button — appears during `end-turn` phase
 - **Waiting message** — shown to non-active players ("Waiting for [name]...")
+- **Recent Activity** — scrollable mini-log (up to 20 entries) shown below the action buttons
 - Bail and Immunity buttons remain in the right-side action panel
-- Keyboard shortcuts (Space/Enter) still trigger the same handlers
+- Keyboard shortcuts (Space/Enter) still trigger roll/end-turn handlers
 
 ### Space Info Modal
 Clicking any board cell opens an info modal displaying detailed information:
@@ -229,7 +231,18 @@ Player avatars are defined in `js/gameData.js` in the `PLAYER_AVATARS` array. Ea
 
 ## Recent Changes (Latest First)
 
-### v1.5.3 - Player Panel Polish, Token Contours & Ownership Indicators (Current)
+### v1.6 - UI Layout Overhaul, Board Center Expansion & Trade Cancel (Current)
+- **Side panels widened:** desktop panel vars increased (`--panel-left-w: 280px`, `--panel-right-w: 320px`; 1200px breakpoint: 230px/260px) so panels nearly touch the board, eliminating wasted space and fixing text overflow issues.
+- **Buy/Decline buttons moved to board center:** `renderCenterActionButton()` now handles the `action` phase, rendering Buy and Decline buttons centrally below the dice (same location as Roll Dice / End Turn). Removed from right-side action panel; space detail card remains in the panel.
+- **City flags enlarged:** `.space-flag` font-size bumped to `clamp(22px, 0.5*cell, 36px)` and `.country-flag-img` width to `clamp(28px, 0.62*cell, 48px)` for better visibility.
+- **Recent Activity moved to board center:** mini-log removed from right-side action panel and rendered in the board center area below the action buttons, with a "Recent Activity" header.
+- **Recent Activity scrollable history:** center mini-log now shows up to 20 entries in a scrollable container (`max-height: 120px`) with thin custom scrollbar, and messages word-wrap instead of truncating with ellipsis.
+- **Board center glow effect:** `.board-center` now has a subtle blue radial glow via `::before` pseudo-element and multi-layer `box-shadow` for a polished ambient light effect.
+- **Wealth indicator removed:** removed the "Wealth" stat from player cards (was redundant). Only Cash, Properties, and Influence remain.
+- **Player card stats enlarged:** `.stat-value` font-size `12px` → `15px`, `.stat-label` `9px` → `10px`, influence bar `4px` → `5px` height, stat change popup `10px` → `12px` to match.
+- **Trade cancel/withdraw:** players can now withdraw their own pending trade offers. New `cancelTrade(tradeId, playerId)` method in `GameEngine`. Trade panel shows "↩️ Withdraw Offer" button for outgoing pending trades. Fully synced for online play via `cancel-trade` action type.
+
+### v1.5.3 - Player Panel Polish, Token Contours & Ownership Indicators
 - **Player avatar colored contour:** board tokens now have a 2.5px colored border matching the player's color (via `currentColor`) with a dark inset shadow for contrast, replacing the old plain white border.
 - **Player panel streamlined:** removed the property flags mini-section (`player-properties-mini` / `prop-dot`) from player cards — property ownership is already visible on the board via ownership indicators.
 - **Stat change animations:** when a player gains or loses money, influence, or properties, a floating popup (green `+$X` / red `-$X`) appears next to the stat value and fades out. Uses `prevPlayerSnapshots` to diff before/after each render.
@@ -392,7 +405,7 @@ Player avatars are defined in `js/gameData.js` in the `PLAYER_AVATARS` array. Ea
   - `calculateRent()` - Rent with all bonuses
   - `buyProperty()` / `developProperty()` / `freeUpgradeProperty()` - Property management
   - `useImmunityCard()` - Separate method for Diplomatic Immunity (validates card ownership)
-  - `proposeTrade()` / `acceptTrade()` - Trading system
+  - `proposeTrade()` / `acceptTrade()` / `cancelTrade()` - Trading system (cancel lets sender withdraw pending offers)
   - `useInfluenceAction()` - Influence powers
   - `checkWinCondition()` - Victory detection
   - `getPlayerById()` - Lookup player by ID
@@ -407,11 +420,11 @@ Player avatars are defined in `js/gameData.js` in the `PLAYER_AVATARS` array. Ea
 - `render()` - Main render dispatcher (preserves chat input, auto-scrolls chat, defers while animation in progress)
 - `renderLobby()` / `renderGame()` - Screen renderers; lobby includes map selection
 - `renderBoard()` - Dynamic NxN CSS grid board; applies `.board-13` class for expanded map
-- `renderCenterActionButton()` - Renders Roll Dice / End Turn button in the board center below dice
+- `renderCenterActionButton()` - Renders Roll Dice / Buy / Decline / End Turn buttons in the board center below dice
 - `renderSpaceInfoModal()` - Renders detailed space info popup when a board cell is clicked
-- `renderPlayerCard()` - Player info panels (cash, properties count, wealth, influence bar; no property flag icons)
+- `renderPlayerCard()` - Player info panels (cash, properties count, influence bar; no wealth or property flag icons)
 - `snapshotPlayerStats()` / `showPlayerChangeAnimations()` - Diff-based floating popup system for stat changes
-- `renderActionPanel()` - Context-sensitive actions with trade notification badge (bail/immunity only; roll/end turn moved to center)
+- `renderActionPanel()` - Context-sensitive actions with trade notification badge (bail/immunity only; roll/end turn/buy/decline moved to center)
 - `renderPropertyPanel()` - Uses local player (not current turn player) in online mode
 - `renderTradePanel()` - Uses local player in online mode
 - `getSpacePosition(id)` - Dynamic grid position calculation based on `state.gridSize`
@@ -491,7 +504,7 @@ Server relays state-update → Client: Object.assign(engine.state, ...) → rend
 - `.board` — default 11x11 grid: `--corner: calc(--board-s / 11 * 1.15)`, `--cell: calc((--board-s - 2*--corner) / 9)`, `repeat(9, var(--cell))`
 - `.board.board-13` — overrides to 13x13: `--corner: calc(--board-s / 13 * 1.12)`, `--cell: calc((--board-s - 2*--corner) / 11)`, `repeat(11, var(--cell))`
 - `.board-center` — grid-row/col `2/11` (classic) or `2/13` (expanded)
-- Board footprint now uses dynamic panel widths: `--avail-h: calc(100vh - 48px)` and `--avail-w: calc(100vw - var(--panel-left-w) - var(--panel-right-w) - var(--layout-side-padding))`; desktop defaults are 260px (left) and 340px (right)
+- Board footprint now uses dynamic panel widths: `--avail-h: calc(100vh - 48px)` and `--avail-w: calc(100vw - var(--panel-left-w) - var(--panel-right-w) - var(--layout-side-padding))`; desktop defaults are 280px (left) and 320px (right)
 - All space content (icons, text, flags, tokens) uses `clamp()` with `var(--cell)` so it scales automatically
 
 ### Rendering
