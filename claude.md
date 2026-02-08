@@ -77,7 +77,7 @@ Host processes in GameEngine → Broadcasts state → Server relays to all Clien
 
 ### Key Patterns in ui.js
 - `isOnlineClient()` — returns true when playing online as non-host
-- `handleRemoteAction(data)` — host dispatches client actions to engine
+- `handleRemoteAction(data)` — host dispatches client actions to engine and rejects turn-based actions from non-active senders
 - All action handlers check `isOnlineClient()` → call `network.sendAction()` instead of engine directly
 - Card decks stripped from network payloads (`stripCardDecks()`) to reduce message size
 - Start Game button double-checks both `lobbyIsHost` and `network.isHost`
@@ -231,7 +231,16 @@ Player avatars are defined in `js/gameData.js` in the `PLAYER_AVATARS` array. Ea
 
 ## Recent Changes (Latest First)
 
-### v1.6 - UI Layout Overhaul, Board Center Expansion & Trade Cancel (Current)
+### v1.6.1 - Gameplay Sync, Action Validation & Animation Timing (Current)
+- **Dice desync fix (display vs movement):** dice UI is now synchronized to authoritative roll values (`state.lastDice`) even when movement animation defers full render. Added direct dice-face/total sync helpers so the displayed roll always matches actual movement.
+- **Dice total correctness:** board-center total now shows animated totals only while rolling; once the roll is resolved it shows the authoritative rolled total instead of a stale/random frame.
+- **Turn-action authority hardening (online):** host now rejects turn-based remote actions (`roll-dice`, `pay-bail`, `use-immunity`, `buy-property`, `decline-purchase`, `end-turn`) if sent by a non-active player.
+- **Trade permission/consistency hardening:** `acceptTrade()` / `rejectTrade()` are now recipient-authorized; `acceptTrade()` also validates current ownership of offered properties at accept-time and rejects malformed overlapping property payloads.
+- **Trade proposal validation:** `proposeTrade()` now rejects invalid self-trades and bankrupt/invalid participant cases.
+- **Rent/payment SFX timing fix:** payment sound is deferred while movement animation is running, then played immediately after landing animation completes (no more mid-path rent sound).
+- **Uniform movement speed:** token movement now uses a fixed per-step delay/transition for all moves (`MOVE_STEP_DELAY_MS`), eliminating fast/slow variation based on path length.
+
+### v1.6 - UI Layout Overhaul, Board Center Expansion & Trade Cancel
 - **Side panels widened:** desktop panel vars increased (`--panel-left-w: 280px`, `--panel-right-w: 320px`; 1200px breakpoint: 230px/260px) so panels nearly touch the board, eliminating wasted space and fixing text overflow issues.
 - **Buy/Decline buttons moved to board center:** `renderCenterActionButton()` now handles the `action` phase, rendering Buy and Decline buttons centrally below the dice (same location as Roll Dice / End Turn). Removed from right-side action panel; space detail card remains in the panel.
 - **City flags enlarged:** `.space-flag` font-size bumped to `clamp(22px, 0.5*cell, 36px)` and `.country-flag-img` width to `clamp(28px, 0.62*cell, 48px)` for better visibility.
@@ -405,7 +414,7 @@ Player avatars are defined in `js/gameData.js` in the `PLAYER_AVATARS` array. Ea
   - `calculateRent()` - Rent with all bonuses
   - `buyProperty()` / `developProperty()` / `freeUpgradeProperty()` - Property management
   - `useImmunityCard()` - Separate method for Diplomatic Immunity (validates card ownership)
-  - `proposeTrade()` / `acceptTrade()` / `cancelTrade()` - Trading system (cancel lets sender withdraw pending offers)
+  - `proposeTrade()` / `acceptTrade()` / `rejectTrade()` / `cancelTrade()` - Trading system with validation (recipient-only accept/reject, ownership checks at accept-time, sender-only cancel)
   - `useInfluenceAction()` - Influence powers
   - `checkWinCondition()` - Victory detection
   - `getPlayerById()` - Lookup player by ID
@@ -415,7 +424,7 @@ Player avatars are defined in `js/gameData.js` in the `PLAYER_AVATARS` array. Ea
 - `getAvatarHtml(avatar, size)` - Renders player avatar as image with emoji fallback
 - `addChatMessage(msg)` - Adds chat message and persists to room-scoped localStorage key
 - `isOnlineClient()` - Returns true when playing online as non-host
-- `handleRemoteAction(data)` - Host dispatches remote client actions to engine
+- `handleRemoteAction(data)` - Host dispatches remote client actions to engine with sender validation for turn-based actions
 - `initApp()` - Entry point, initializes state
 - `render()` - Main render dispatcher (preserves chat input, auto-scrolls chat, defers while animation in progress)
 - `renderLobby()` / `renderGame()` - Screen renderers; lobby includes map selection
@@ -430,8 +439,9 @@ Player avatars are defined in `js/gameData.js` in the `PLAYER_AVATARS` array. Ea
 - `getSpacePosition(id)` - Dynamic grid position calculation based on `state.gridSize`
 - `flagEmojiToCode(flagEmoji)` - Converts regional-indicator flag emoji to ISO country code (example: `🇫🇯` -> `FJ`)
 - `attachGameEvents()` - Event listener setup (includes center button handlers, space click → info modal)
-- `handleRollDice()` - Dice animation + engine call (or sendAction for clients)
-- `animatePlayerMovement()` - Smooth floating token sliding between cells (wraps via `% state.totalSpaces`)
+- `handleRollDice()` - Dice animation + engine call (or sendAction for clients), with authoritative dice face/total sync
+- `animatePlayerMovement()` - Smooth floating token sliding between cells (wraps via `% state.totalSpaces`) with fixed per-step timing
+- `queuePostMoveSound()` / `flushPostMoveSounds()` - Defers landing-related SFX (e.g., rent payment) until movement animation completes
 - `getFlagHtml()` - Converts flag emoji to image for cross-platform display; now also falls back to `flagEmojiToCode()` for new countries not present in the static map
 - `hostOnlineGame()` / `joinOnlineGame()` - Network setup with callbacks
 - `handleHostPlayerConnection()` - Host-side disconnect/reconnect state handling

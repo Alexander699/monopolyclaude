@@ -2322,7 +2322,11 @@ function handleAnimation(type, data) {
       sound.playPurchase();
       break;
     case 'payment':
-      sound.playRentPaid();
+      if (movementAnimationInProgress) {
+        queuePostMoveSound(() => sound.playRentPaid());
+      } else {
+        sound.playRentPaid();
+      }
       break;
     case 'card': {
       sound.playCard();
@@ -2360,6 +2364,27 @@ function handleAnimation(type, data) {
 
 let movementAnimationInProgress = false;
 let pendingRenderAfterAnimation = false;
+let pendingPostMoveSounds = [];
+const MOVE_STEP_DELAY_MS = 95;
+const MOVE_START_DELAY_MS = 80;
+
+function queuePostMoveSound(playFn) {
+  if (typeof playFn !== 'function') return;
+  pendingPostMoveSounds.push(playFn);
+}
+
+function flushPostMoveSounds() {
+  if (pendingPostMoveSounds.length === 0) return;
+  const queued = pendingPostMoveSounds;
+  pendingPostMoveSounds = [];
+  queued.forEach((playFn) => {
+    try {
+      playFn();
+    } catch (e) {
+      console.warn('[AUDIO] Failed to play deferred sound:', e);
+    }
+  });
+}
 
 function animatePlayerMovement(playerId, fromPos, toPos) {
   if (movementAnimationInProgress) return;
@@ -2403,7 +2428,7 @@ function animatePlayerMovement(playerId, fromPos, toPos) {
     z-index: 100;
     pointer-events: none;
     box-shadow: 0 3px 10px rgba(0,0,0,0.6);
-    transition: left 0.12s ease-out, top 0.12s ease-out;
+    transition: left ${MOVE_STEP_DELAY_MS}ms ease-out, top ${MOVE_STEP_DELAY_MS}ms ease-out;
   `;
 
   board.style.position = 'relative';
@@ -2427,10 +2452,10 @@ function animatePlayerMovement(playerId, fromPos, toPos) {
   // Force initial position without transition
   floater.style.transition = 'none';
   floater.offsetHeight; // Force reflow
-  floater.style.transition = 'left 0.12s ease-out, top 0.12s ease-out';
+  floater.style.transition = `left ${MOVE_STEP_DELAY_MS}ms ease-out, top ${MOVE_STEP_DELAY_MS}ms ease-out`;
 
   let stepIndex = 0;
-  const delay = path.length > 8 ? 60 : 120;
+  const delay = MOVE_STEP_DELAY_MS;
 
   function animateStep() {
     if (stepIndex >= path.length) {
@@ -2438,6 +2463,7 @@ function animatePlayerMovement(playerId, fromPos, toPos) {
       floater.remove();
       movementAnimationInProgress = false;
       pendingRenderAfterAnimation = false;
+      flushPostMoveSounds();
       render();
       return;
     }
@@ -2448,7 +2474,7 @@ function animatePlayerMovement(playerId, fromPos, toPos) {
     setTimeout(animateStep, delay);
   }
 
-  setTimeout(animateStep, 80);
+  setTimeout(animateStep, MOVE_START_DELAY_MS);
 }
 
 // ---- Helpers ----
