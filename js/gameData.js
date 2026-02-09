@@ -16,7 +16,7 @@ export const ALLIANCES = {
     name: 'Eastern Partnership',
     color: '#8B4513',
     lightColor: '#b87333',
-    bonus: 'Earn 50 influence per turn',
+    bonus: 'Earn 10 influence per turn',
     resource: 'agriculture'
   },
   ASIAN_TIGERS: {
@@ -40,7 +40,7 @@ export const ALLIANCES = {
     name: 'BRICS Nations',
     color: '#228B22',
     lightColor: '#4dbd4d',
-    bonus: '+100 influence when collecting rent',
+    bonus: 'Extra influence from rent collected',
     resource: 'oil'
   },
   OIL_NATIONS: {
@@ -48,7 +48,7 @@ export const ALLIANCES = {
     name: 'Oil Nations',
     color: '#000000',
     lightColor: '#4d4d4d',
-    bonus: 'Collect oil royalties: $300/turn',
+    bonus: 'Collect oil royalties: $100/turn',
     resource: 'oil'
   },
   AMERICAS: {
@@ -64,7 +64,7 @@ export const ALLIANCES = {
     name: 'African Rising',
     color: '#9932CC',
     lightColor: '#b366d9',
-    bonus: 'Tourism income: $250/turn',
+    bonus: 'Tourism income: $80/turn',
     resource: 'tourism'
   },
   PACIFIC_ISLANDS: {
@@ -72,7 +72,7 @@ export const ALLIANCES = {
     name: 'Pacific Islands',
     color: '#00CED1',
     lightColor: '#40E0D0',
-    bonus: 'Tourism boost: $200/turn',
+    bonus: 'Tourism boost: $60/turn',
     resource: 'tourism'
   },
   NORDIC: {
@@ -80,7 +80,7 @@ export const ALLIANCES = {
     name: 'Nordic Council',
     color: '#4682B4',
     lightColor: '#6CA6CD',
-    bonus: '+75 influence per turn',
+    bonus: '+15 influence per turn',
     resource: 'tech'
   }
 };
@@ -109,7 +109,7 @@ export const BOARD = [
   { id: 1, type: 'country', name: 'Gyumri', alliance: 'EASTERN', price: 600, flag: '🇦🇲', resource: 'agriculture', rents: [20, 40, 120, 360, 640, 900] },
   { id: 2, type: 'card', subtype: 'diplomaticCable', name: 'Diplomatic Cable', icon: '📜' },
   { id: 3, type: 'country', name: 'Kapan', alliance: 'EASTERN', price: 800, flag: '🇦🇲', resource: 'tech', rents: [30, 60, 180, 500, 700, 1000], featured: true },
-  { id: 4, type: 'tax', name: 'Import Tariff', amount: 200, icon: '💰' },
+  { id: 4, type: 'tax', name: 'Import Tariff', amount: 600, icon: '💰' },
   { id: 5, type: 'transport', name: 'Maritime Routes', price: 2000, icon: '🚢', rents: [250, 500, 1000, 2000] },
   { id: 6, type: 'country', name: 'Yerevan', alliance: 'EASTERN', price: 1000, flag: '🇦🇲', resource: 'agriculture', rents: [40, 80, 220, 600, 800, 1100] },
   { id: 7, type: 'country', name: 'Alexandria', alliance: 'AFRICAN_RISING', price: 1000, flag: '🇪🇬', resource: 'oil', rents: [40, 80, 220, 600, 800, 1100] },
@@ -149,7 +149,7 @@ export const BOARD = [
   { id: 35, type: 'transport', name: 'Digital Networks', price: 2000, icon: '📡', rents: [250, 500, 1000, 2000] },
   { id: 36, type: 'card', subtype: 'globalNews', name: 'Global News', icon: '📰' },
   { id: 37, type: 'country', name: 'New York', alliance: 'AMERICAS', price: 3500, flag: '🇺🇸', resource: 'agriculture', rents: [140, 280, 840, 1900, 2400, 3000] },
-  { id: 38, type: 'tax', name: 'Luxury Tax', amount: 300, icon: '💎' },
+  { id: 38, type: 'tax', name: 'Luxury Tax', amount: 1200, icon: '💎' },
   { id: 39, type: 'country', name: 'San Francisco', alliance: 'AMERICAS', price: 4000, flag: '🇺🇸', resource: 'tech', rents: [150, 300, 900, 2000, 2500, 3200] }
 ];
 
@@ -161,7 +161,7 @@ export const BOARD_EXPANDED = [
   { id: 1, type: 'country', name: 'Gyumri', alliance: 'EASTERN', price: 600, flag: '🇦🇲', resource: 'agriculture', rents: [20, 40, 120, 360, 640, 900] },
   { id: 2, type: 'card', subtype: 'diplomaticCable', name: 'Diplomatic Cable', icon: '📜' },
   { id: 3, type: 'country', name: 'Kapan', alliance: 'EASTERN', price: 800, flag: '🇦🇲', resource: 'tech', rents: [30, 60, 180, 500, 700, 1000], featured: true },
-  { id: 4, type: 'tax', name: 'Import Tariff', amount: 200, icon: '💰' },
+  { id: 4, type: 'tax', name: 'Import Tariff', amount: 600, icon: '💰' },
   { id: 5, type: 'transport', name: 'Maritime Routes', price: 2000, icon: '🚢', rents: [250, 500, 1000, 2000] },
   { id: 6, type: 'country', name: 'Yerevan', alliance: 'EASTERN', price: 1000, flag: '🇦🇲', resource: 'agriculture', rents: [40, 80, 220, 600, 800, 1100] },
   { id: 7, type: 'country', name: 'Alexandria', alliance: 'AFRICAN_RISING', price: 1000, flag: '🇪🇬', resource: 'oil', rents: [40, 80, 220, 600, 800, 1100] },
@@ -209,7 +209,7 @@ export const BOARD_EXPANDED = [
   { id: 43, type: 'country', name: 'Riyadh', alliance: 'OIL_NATIONS', price: 3000, flag: '🇸🇦', resource: 'oil', rents: [120, 240, 720, 1600, 2000, 2600] },
   { id: 44, type: 'country', name: 'Chicago', alliance: 'AMERICAS', price: 3200, flag: '🇺🇸', resource: 'oil', rents: [130, 260, 780, 1800, 2200, 2800] },
   { id: 45, type: 'country', name: 'New York', alliance: 'AMERICAS', price: 3500, flag: '🇺🇸', resource: 'agriculture', rents: [140, 280, 840, 1900, 2400, 3000] },
-  { id: 46, type: 'tax', name: 'Luxury Tax', amount: 300, icon: '💎' },
+  { id: 46, type: 'tax', name: 'Luxury Tax', amount: 1200, icon: '💎' },
   { id: 47, type: 'country', name: 'San Francisco', alliance: 'AMERICAS', price: 4000, flag: '🇺🇸', resource: 'tech', rents: [150, 300, 900, 2000, 2500, 3200] }
 ];
 
@@ -302,9 +302,9 @@ export const PLAYER_AVATARS = [
   { emoji: '🏆', img: 'https://api.dicebear.com/9.x/bottts-neutral/svg?seed=player8' },
 ];
 
-export const STARTING_MONEY = 15000;
-export const GO_SALARY = 2000;
-export const SANCTIONS_BAIL = 500;
-export const INFLUENCE_TO_WIN = 1000;
+export const STARTING_MONEY = 8000;
+export const GO_SALARY = 700;
+export const SANCTIONS_BAIL = 1000;
+export const INFLUENCE_TO_WIN = 2500;
 export const MAX_PLAYERS = 8;
 export const MIN_PLAYERS = 2;

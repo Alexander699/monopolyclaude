@@ -1259,6 +1259,7 @@ function renderPropertyPanel() {
     const space = engine.getSpace(pid);
     const alliance = ALLIANCES[space.alliance];
     const devCost = engine.getDevelopmentCost(pid);
+    const sellValue = engine.getPropertySaleValue(pid);
     const canDevelop = devCost !== Infinity && currentPlayer.money >= devCost &&
                        engine.hasCompleteAlliance(currentPlayer.id, space.alliance);
     const canFreeUpgrade = hasFreeUpgrade && space.type === 'country' && devCost !== Infinity &&
@@ -1290,14 +1291,19 @@ function renderPropertyPanel() {
               ⬇️ Sell Dev
             </button>
           ` : ''}
+          ${sellValue > 0 ? `
+            <button class="btn btn-xs btn-danger" data-sell-property="${pid}">
+              🏷️ Liquidate ($${sellValue})
+            </button>
+          ` : ''}
           ${!space.mortgaged && space.developmentLevel === 0 ? `
             <button class="btn btn-xs btn-danger" data-mortgage="${pid}">
-              💳 Mortgage ($${Math.floor(space.price / 2)})
+              💳 Mortgage ($${Math.floor(space.price * 0.35)})
             </button>
           ` : ''}
           ${space.mortgaged ? `
             <button class="btn btn-xs btn-info" data-unmortgage="${pid}">
-              💳 Unmortgage ($${Math.floor(space.price * 0.55)})
+              💳 Unmortgage ($${Math.floor(space.price * 0.45)})
             </button>
           ` : ''}
         </div>
@@ -1743,6 +1749,16 @@ function attachGameEvents() {
       engine.sellDevelopment(engine.getCurrentPlayer().id, spaceId);
     });
   });
+  document.querySelectorAll('[data-sell-property]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const spaceId = parseInt(btn.dataset.sellProperty);
+      if (isOnlineClient()) {
+        network.sendAction({ actionType: 'sell-property', spaceId });
+        return;
+      }
+      engine.sellProperty(engine.getCurrentPlayer().id, spaceId);
+    });
+  });
 
   // Trade partner selection
   document.querySelectorAll('[data-partner]').forEach(btn => {
@@ -2026,6 +2042,9 @@ function handleRemoteAction(data) {
       break;
     case 'sell-development':
       engine.sellDevelopment(senderId, data.spaceId);
+      break;
+    case 'sell-property':
+      engine.sellProperty(senderId, data.spaceId);
       break;
   }
 }
