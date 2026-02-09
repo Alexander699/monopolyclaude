@@ -798,7 +798,6 @@ function renderGame() {
       ${showTradePanel ? renderTradePanel() : ''}
       ${showLogPanel ? renderLogPanel() : ''}
       ${showCardModal ? renderCardModal() : ''}
-      ${selectedSpaceInfo !== null ? renderSpaceInfoModal() : ''}
       ${state.gameOver ? renderGameOverOverlay() : ''}
     </div>
   `;
@@ -925,14 +924,19 @@ function renderBoard() {
   // Main action button below dice
   html += renderCenterActionButton();
 
-  // Recent Activity mini-log in board center (scrollable)
-  const recentLogs = state.log.slice(-20).reverse();
-  if (recentLogs.length > 0) {
-    html += `<div class="center-mini-log">`;
-    html += `<div class="center-mini-log-header">Recent Activity</div>`;
-    html += `<div class="center-mini-log-scroll">`;
-    html += recentLogs.map(l => `<div class="center-log-entry log-${l.type}">${l.message}</div>`).join('');
-    html += `</div></div>`;
+  // Show space info inline OR recent activity
+  if (selectedSpaceInfo !== null) {
+    html += renderSpaceInfoInline();
+  } else {
+    // Recent Activity mini-log in board center (scrollable)
+    const recentLogs = state.log.slice(-20).reverse();
+    if (recentLogs.length > 0) {
+      html += `<div class="center-mini-log">`;
+      html += `<div class="center-mini-log-header">Recent Activity</div>`;
+      html += `<div class="center-mini-log-scroll">`;
+      html += recentLogs.map(l => `<div class="center-log-entry log-${l.type}">${l.message}</div>`).join('');
+      html += `</div></div>`;
+    }
   }
 
   html += '</div>';
@@ -1488,12 +1492,8 @@ function renderCardModal() {
   `;
 }
 
-// ---- Space Info Modal ----
-function renderSpaceInfoModal() {
-  if (selectedSpaceInfo === null || !engine) return '';
-  const space = engine.getSpace(selectedSpaceInfo);
-  if (!space) return '';
-
+// ---- Space Info (shared body builder) ----
+function buildSpaceInfoBody(space) {
   const alliance = space.alliance ? ALLIANCES[space.alliance] : null;
   const owner = space.owner ? engine.getPlayerById(space.owner) : null;
   const resource = space.resource ? RESOURCES[space.resource] : null;
@@ -1508,10 +1508,10 @@ function renderSpaceInfoModal() {
       <div class="sinfo-divider"></div>
       <div class="sinfo-label">Rent Schedule</div>
       <div class="sinfo-row"><span>Base Rent:</span><span>$${space.rents[0]}</span></div>
-      ${space.rents.slice(1, 5).map((r, i) => `
+      ${space.rents.slice(1, 4).map((r, i) => `
         <div class="sinfo-row"><span>${DEVELOPMENT_TIERS[i+1].icon} ${DEVELOPMENT_TIERS[i+1].name}:</span><span>$${r}</span></div>
       `).join('')}
-      ${space.rents[5] ? `<div class="sinfo-row"><span>${DEVELOPMENT_TIERS[4].icon} ${DEVELOPMENT_TIERS[4].name}:</span><span>$${space.rents[5]}</span></div>` : ''}
+      ${space.rents[4] != null ? `<div class="sinfo-row"><span>${DEVELOPMENT_TIERS[4].icon} ${DEVELOPMENT_TIERS[4].name}:</span><span>$${space.rents[4]}</span></div>` : ''}
       <div class="sinfo-divider"></div>
       <div class="sinfo-row"><span>Development:</span><span>${DEVELOPMENT_TIERS[space.developmentLevel].icon || '—'} ${DEVELOPMENT_TIERS[space.developmentLevel].name}</span></div>
       <div class="sinfo-row"><span>Owner:</span><span ${owner ? `style="color:${owner.color}"` : ''}>${owner ? owner.name : 'Unowned'}</span></div>
@@ -1554,20 +1554,28 @@ function renderSpaceInfoModal() {
     bodyHtml += `<div class="sinfo-desc">${descriptions[space.subtype] || space.name}</div>`;
   }
 
+  return bodyHtml;
+}
+
+// ---- Space Info Inline (board center) ----
+function renderSpaceInfoInline() {
+  if (selectedSpaceInfo === null || !engine) return '';
+  const space = engine.getSpace(selectedSpaceInfo);
+  if (!space) return '';
+
+  const alliance = space.alliance ? ALLIANCES[space.alliance] : null;
   const headerColor = alliance?.color || (space.type === 'transport' ? '#555' : space.type === 'infrastructure' ? '#666' : 'var(--bg-hover)');
   const flagOrIcon = space.flag ? getFlagHtml(space.flag) : (space.icon || '');
 
   return `
-    <div class="modal-overlay" id="space-info-overlay">
-      <div class="modal space-info-modal">
-        <div class="sinfo-header" style="background:${headerColor}">
-          <span class="sinfo-icon">${flagOrIcon}</span>
-          <span class="sinfo-name">${space.name}</span>
-          <button class="sinfo-close" id="close-space-info">&times;</button>
-        </div>
-        <div class="sinfo-body">
-          ${bodyHtml}
-        </div>
+    <div class="center-space-info">
+      <div class="sinfo-header" style="background:${headerColor}">
+        <span class="sinfo-icon">${flagOrIcon}</span>
+        <span class="sinfo-name">${space.name}</span>
+        <button class="sinfo-close" id="close-space-info">&times;</button>
+      </div>
+      <div class="sinfo-body">
+        ${buildSpaceInfoBody(space)}
       </div>
     </div>
   `;
@@ -1818,25 +1826,19 @@ function attachGameEvents() {
     resetToLobby();
   });
 
-  // Space click for info
+  // Space click for info (toggle: click same space again to close)
   document.querySelectorAll('[data-space-id]').forEach(el => {
     el.addEventListener('click', () => {
       const spaceId = parseInt(el.dataset.spaceId);
-      selectedSpaceInfo = spaceId;
+      selectedSpaceInfo = selectedSpaceInfo === spaceId ? null : spaceId;
       render();
     });
   });
 
-  // Space info modal close
+  // Space info close
   document.getElementById('close-space-info')?.addEventListener('click', () => {
     selectedSpaceInfo = null;
     render();
-  });
-  document.getElementById('space-info-overlay')?.addEventListener('click', (e) => {
-    if (e.target.id === 'space-info-overlay') {
-      selectedSpaceInfo = null;
-      render();
-    }
   });
 }
 

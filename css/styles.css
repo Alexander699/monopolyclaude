@@ -1148,15 +1148,15 @@ body {
 .space-group-flag {
   position: absolute;
   z-index: 6;
-  width: clamp(15px, calc(var(--cell) * 0.29), 24px);
-  height: clamp(15px, calc(var(--cell) * 0.29), 24px);
+  width: clamp(20px, calc(var(--cell) * 0.42), 34px);
+  height: clamp(20px, calc(var(--cell) * 0.42), 34px);
   border-radius: 50%;
   background: rgba(11, 13, 24, 0.94);
   border: 1px solid rgba(236, 241, 255, 0.62);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: clamp(8px, calc(var(--cell) * 0.14), 12px);
+  font-size: clamp(11px, calc(var(--cell) * 0.22), 18px);
   line-height: 1;
   box-shadow: 0 3px 8px rgba(2, 4, 11, 0.56);
   padding: 1px;
@@ -2086,7 +2086,83 @@ body {
   margin: 0 20px 16px;
 }
 
-/* Space Info Modal */
+/* Space Info Inline (board center) */
+.center-space-info {
+  margin-top: 8px;
+  max-width: 300px;
+  width: 100%;
+  background: rgba(30, 41, 59, 0.95);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(120, 140, 255, 0.2);
+  animation: cardFlipIn 0.25s ease;
+  max-height: 280px;
+  display: flex;
+  flex-direction: column;
+}
+
+.center-space-info .sinfo-header {
+  padding: 8px 12px;
+  flex-shrink: 0;
+}
+
+.center-space-info .sinfo-name {
+  font-size: 13px;
+}
+
+.center-space-info .sinfo-icon {
+  font-size: 18px;
+}
+
+.center-space-info .sinfo-icon img {
+  width: 24px;
+}
+
+.center-space-info .sinfo-body {
+  padding: 8px 12px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.15) transparent;
+}
+
+.center-space-info .sinfo-body::-webkit-scrollbar {
+  width: 4px;
+}
+
+.center-space-info .sinfo-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.center-space-info .sinfo-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 2px;
+}
+
+.center-space-info .sinfo-row {
+  font-size: 11px;
+  padding: 2px 0;
+}
+
+.center-space-info .sinfo-label {
+  font-size: 10px;
+}
+
+.center-space-info .sinfo-bonus {
+  font-size: 11px;
+}
+
+.center-space-info .sinfo-desc {
+  font-size: 11px;
+}
+
+.center-space-info .sinfo-divider {
+  margin: 4px 0;
+}
+
+/* Space Info Modal (legacy, kept for reference) */
 .space-info-modal {
   max-width: 340px;
   width: 90%;
