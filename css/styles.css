@@ -1175,15 +1175,15 @@ body {
 }
 
 .space-left .space-group-flag {
-  right: 4px;
+  right: 3px;
   top: 50%;
-  transform: translate(24%, -50%);
+  transform: translate(35%, -50%);
 }
 
 .space-right .space-group-flag {
-  left: 4px;
+  left: 3px;
   top: 50%;
-  transform: translate(-24%, -50%);
+  transform: translate(-35%, -50%);
 }
 
 .space-inner {
