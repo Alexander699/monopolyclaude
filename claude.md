@@ -97,7 +97,7 @@ Players choose a map in the lobby before starting the game. The map selection UI
 MAPS = {
   classic: {
     id: 'classic', name: 'Classic',
-    description: '40 spaces · 22 countries · 8 alliances',
+    description: '40 spaces · 23 cities · 8 alliances',
     board: BOARD, gridSize: 11, totalSpaces: 40,
     corners: [0, 10, 20, 30]
   },
@@ -120,21 +120,21 @@ All board logic is now driven by `state.gridSize`, `state.totalSpaces`, and `sta
 
 ### Classic Board Layout (40 spaces, 11x11 grid)
 ```
-Bottom (0-10):  GO → Moldova → DiploCable → Armenia → Tariff → Maritime → Ukraine → GlobalNews → Nigeria → Kenya → Sanctions
-Left (11-20):   Egypt → Internet → SouthAfrica → India → Rail → Bangladesh → DiploCable → SriLanka → Nepal → FreeTrade
-Top (21-30):    France → GlobalNews → Germany → UK → AirRoutes → Japan → SouthKorea → Shipping → China → Incident
-Right (31-39):  Brazil → Singapore → DiploCable → SaudiArabia → Digital → Canada → UAE → LuxuryTax → USA
+Bottom (0-10):  GO → Gyumri → DiploCable → Kapan → Tariff → Maritime → Yerevan → Alexandria → Giza → Cairo → Sanctions
+Left (11-20):   Mumbai → Internet → Bengaluru → Delhi → Rail → Salvador → DiploCable → Rio → SaoPaulo → FreeTrade
+Top (21-30):    Paris → GlobalNews → Toulouse → Lyon → AirRoutes → TelAviv → Haifa → Shipping → Jerusalem → Incident
+Right (31-39):  Dubai → Riyadh → DiploCable → AbuDhabi → Digital → GlobalNews → NewYork → LuxuryTax → SanFrancisco
 ```
 
 ### Expanded Board Layout (48 spaces, 13x13 grid)
 ```
-Bottom (0-12):  GO → Moldova → DiploCable → Armenia → Tariff → Maritime → Ukraine → GlobalNews → Nigeria → Kenya → Mexico → Fiji → Sanctions
-Left (13-24):   Egypt → Internet → SouthAfrica → India → Rail → Bangladesh → DiploCable → SriLanka → Nepal → Norway → Sweden → FreeTrade
-Top (25-36):    France → GlobalNews → Germany → UK → AirRoutes → Japan → SouthKorea → Shipping → China → Indonesia → PapuaNewGuinea → Incident
-Right (37-47):  Brazil → Singapore → DiploCable → SaudiArabia → Digital → Canada → UAE → Finland → NewZealand → LuxuryTax → USA
+Bottom (0-12):  GO → Gyumri → DiploCable → Kapan → Tariff → Maritime → Yerevan → Alexandria → GlobalNews → Giza → Cairo → GlobalNews → Sanctions
+Left (13-24):   Mumbai → Internet → Bengaluru → Delhi → Rail → Salvador → DiploCable → Rio → SaoPaulo → Stockholm → Gothenburg → FreeTrade
+Top (25-36):    Malmo → Paris → GlobalNews → Toulouse → AirRoutes → Lyon → TelAviv → Haifa → Shipping → Jerusalem → Auckland → Incident
+Right (37-47):  Wellington → Queenstown → DiploCable → Dubai → Digital → AbuDhabi → Riyadh → Chicago → NewYork → LuxuryTax → SanFrancisco
 ```
 
-New countries in expanded: Mexico (AMERICAS), Fiji (PACIFIC_ISLANDS), Norway (NORDIC), Sweden (NORDIC), Indonesia (SOUTH_ASIAN), Papua New Guinea (PACIFIC_ISLANDS), Finland (NORDIC), New Zealand (PACIFIC_ISLANDS)
+Additional cities in expanded: Yerevan (EASTERN, also on classic), Riyadh (OIL_NATIONS, also on classic), Chicago (AMERICAS), Auckland/Wellington/Queenstown (PACIFIC_ISLANDS), Stockholm/Gothenburg/Malmo (NORDIC)
 
 ## Game Mechanics
 
@@ -146,20 +146,20 @@ New countries in expanded: Mexico (AMERICAS), Fiji (PACIFIC_ISLANDS), Norway (NO
 Own ALL countries in an alliance to unlock the bonus (like Monopoly color sets).
 Must complete an alliance before developing (building) on any of its countries.
 
-| Alliance | Countries | Completion Bonus |
-|----------|-----------|------------------|
-| EASTERN | Moldova, Armenia, Ukraine | +50 influence/turn |
-| AFRICAN_RISING | Nigeria, Kenya, Egypt | $250 tourism income/turn |
-| SOUTH_ASIAN | India, Bangladesh, Sri Lanka, Nepal (+Indonesia on expanded) | +$200 on all rent collected |
-| BRICS | South Africa, China, Brazil | +100 influence per rent payment |
-| EU | France, Germany, UK | Double rent on developed properties |
-| ASIAN_TIGERS | Japan, South Korea, Singapore | Tech Hub costs -50% |
-| OIL_NATIONS | Saudi Arabia, UAE | $300 oil royalties/turn |
-| AMERICAS | Canada, USA (+Mexico on expanded) | Free development upgrade/round |
-| PACIFIC_ISLANDS | Fiji, Papua New Guinea, New Zealand | $200 tourism boost/turn |
-| NORDIC | Norway, Sweden, Finland | +75 influence/turn |
+| Alliance | Countries (Classic) | Countries (Expanded) | Completion Bonus |
+|----------|-----------|-----------|------------------|
+| EASTERN | Gyumri, Kapan, Yerevan | Same | +50 influence/turn |
+| AFRICAN_RISING | Alexandria, Giza, Cairo | Same | $250 tourism income/turn |
+| SOUTH_ASIAN | Mumbai, Bengaluru, Delhi | Same | +$200 on all rent collected |
+| BRICS | Salvador, Rio, Sao Paulo | Same | +100 influence per rent payment |
+| EU | Paris, Toulouse, Lyon | Same | Double rent on developed properties |
+| ASIAN_TIGERS | Tel Aviv, Haifa, Jerusalem | Same | Tech Hub costs -50% |
+| OIL_NATIONS | Dubai, Riyadh, Abu Dhabi | Same | $300 oil royalties/turn |
+| AMERICAS | New York, San Francisco | + Chicago | Free development upgrade/round |
+| PACIFIC_ISLANDS | — | Auckland, Wellington, Queenstown | $200 tourism boost/turn |
+| NORDIC | — | Stockholm, Gothenburg, Malmo | +75 influence/turn |
 
-**Note:** PACIFIC_ISLANDS and NORDIC alliances only appear on the expanded "World Domination" map. AMERICAS and SOUTH_ASIAN gain extra members on the expanded map.
+**Note:** PACIFIC_ISLANDS and NORDIC alliances only appear on the expanded "World Domination" map. AMERICAS gains Chicago on the expanded map.
 
 ### Development Tiers (replaces houses/hotels)
 1. **Local Markets** (🏪) - Cost: 50% of price, 2x rent
@@ -304,7 +304,7 @@ Player avatars are defined in `js/gameData.js` in the `PLAYER_AVATARS` array. Ea
 - **CSS `.board-13` class**: Overrides grid to 13x13 with `repeat(11, var(--cell))` inner cells and board-center spanning `2/13`
 - **`createGameState(playerNames, mapId)`**: Now accepts optional `mapId` parameter (defaults to `'classic'`); stores map metadata in state
 - **`network.startGame(mapId)`**: Passes map selection from host to game creation
-- **Card dc17 fix**: "Advance to India" now uses `spaceName: 'India'` instead of hardcoded `spaceId: 14`, so it works on both maps
+- **Card dc17 fix**: "Advance to Mumbai" now uses `spaceName: 'Mumbai'` instead of hardcoded `spaceId: 14`, so it works on both maps
 - **Save/load backwards compatibility**: Old saves without map metadata get classic map defaults injected on load
 - **Roll Dice / End Turn moved to board center**: Main action buttons now render below the dice in the board center area via `renderCenterActionButton()`, with pulsing blue glow animation
 - **Side panel cleaned up**: Roll/End Turn buttons removed from right-side action panel; bail/immunity buttons remain
@@ -545,7 +545,7 @@ To add a third map variant:
 window.enableDebug()
 
 window.debug.giveMoney(5000)
-window.debug.giveProperty(14)              // India (classic map ID)
+window.debug.giveProperty(14)              // Delhi (classic map ID)
 window.debug.giveInfluence(500)
 window.debug.moveTo(10)                    // Trade Sanctions (classic)
 window.debug.completeAlliance('EASTERN')
@@ -561,12 +561,12 @@ window.debug.listAlliances()
 
 ### Key Space IDs (Classic Map)
 - 0: Global Summit (GO), 10: Trade Sanctions (Jail), 20: Free Trade Zone, 30: International Incident
-- 3: Armenia, 14: India, 39: USA (most expensive)
+- 3: Kapan, 14: Delhi, 39: San Francisco (most expensive)
 
 ### Key Space IDs (Expanded Map)
 - 0: Global Summit (GO), 12: Trade Sanctions (Jail), 24: Free Trade Zone, 36: International Incident
-- 3: Armenia, 16: India, 47: USA (most expensive)
-- New: 10: Mexico, 11: Fiji, 22: Norway, 23: Sweden, 34: Indonesia, 35: Papua New Guinea, 44: Finland, 45: New Zealand
+- 3: Kapan, 16: Delhi, 47: San Francisco (most expensive)
+- Expanded-only: 22: Stockholm, 23: Gothenburg, 25: Malmo, 35: Auckland, 37: Wellington, 38: Queenstown, 43: Riyadh, 44: Chicago
 
 ## Quick Reference
 
