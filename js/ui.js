@@ -93,6 +93,22 @@ let prevPlayerSnapshots = {}; // Track previous money/influence/property counts 
 
 // ---- Board Layout Helpers ----
 // Board is NxN grid (11x11 for classic, 13x13 for expanded). Spaces go clockwise:
+// Colorize player names in log messages
+function colorizeLogMessage(message, players) {
+  if (!players || players.length === 0) return message;
+  // Sort by name length descending so longer names match first (avoids partial matches)
+  const sorted = [...players].sort((a, b) => b.name.length - a.name.length);
+  let result = message;
+  for (const p of sorted) {
+    if (p.name && result.includes(p.name)) {
+      const escaped = p.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      result = result.replace(new RegExp(escaped, 'g'),
+        `<span style="color:${p.color};font-weight:700">${p.name}</span>`);
+    }
+  }
+  return result;
+}
+
 // Bottom row: 0(BR corner) to N-1(BL corner) - right to left
 // Left column: N to 2*(N-1)-1 then 2*(N-1)=TL corner - bottom to top
 // Top row: 2*(N-1)+1 to 3*(N-1)=TR corner - left to right
@@ -934,7 +950,7 @@ function renderBoard() {
       html += `<div class="center-mini-log">`;
       html += `<div class="center-mini-log-header">Recent Activity</div>`;
       html += `<div class="center-mini-log-scroll">`;
-      html += recentLogs.map(l => `<div class="center-log-entry log-${l.type}">${l.message}</div>`).join('');
+      html += recentLogs.map(l => `<div class="center-log-entry log-${l.type}">${colorizeLogMessage(l.message, state.players)}</div>`).join('');
       html += `</div></div>`;
     }
   }
