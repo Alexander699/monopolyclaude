@@ -1651,7 +1651,7 @@ function buildSpaceInfoBody(space) {
     bodyHtml += `
       <div class="sinfo-row"><span>Price:</span><span>$${space.price}</span></div>
       <div class="sinfo-divider"></div>
-      <div class="sinfo-row"><span>Rent:</span><span>4x / 10x dice roll</span></div>
+      <div class="sinfo-row"><span>Rent:</span><span>5x / 10x dice roll</span></div>
       <div class="sinfo-row"><span>Owner:</span><span ${owner ? `style="color:${owner.color}"` : ''}>${owner ? owner.name : 'Unowned'}</span></div>
     `;
   } else if (space.type === 'tax') {

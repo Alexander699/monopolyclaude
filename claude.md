@@ -166,14 +166,14 @@ Must complete an alliance before developing (building) on any of its countries.
 | Alliance | Countries (Classic) | Countries (Expanded) | Completion Bonus |
 |----------|-----------|-----------|------------------|
 | EASTERN | Gyumri, Kapan, Yerevan | Same | +12 influence/turn |
-| AFRICAN_RISING | Alexandria, Giza, Cairo | Same | $100 tourism income/turn |
+| AFRICAN_RISING | Alexandria, Giza, Cairo | Same | $150 tourism income/turn |
 | SOUTH_ASIAN | Mumbai, Bengaluru, Delhi | Same | +$200 on all rent collected |
 | BRICS | Salvador, Rio, Sao Paulo | Same | Extra influence from rent collected |
 | EU | Paris, Toulouse, Lyon | Same | Double rent on developed properties |
 | ASIAN_TIGERS | Tel Aviv, Haifa, Jerusalem | Same | Tech Hub costs -50% |
-| OIL_NATIONS | Dubai, Riyadh, Abu Dhabi | Same | $130 oil royalties/turn |
+| OIL_NATIONS | Dubai, Riyadh, Abu Dhabi | Same | $200 oil royalties/turn |
 | AMERICAS | New York, San Francisco | + Chicago | Free development upgrade/round |
-| PACIFIC_ISLANDS | — | Auckland, Wellington, Queenstown | $80 tourism boost/turn |
+| PACIFIC_ISLANDS | — | Auckland, Wellington, Queenstown | $120 tourism boost/turn |
 | NORDIC | — | Stockholm, Gothenburg, Malmo | +20 influence/turn |
 
 **Note:** PACIFIC_ISLANDS and NORDIC alliances only appear on the expanded "World Domination" map. AMERICAS gains Chicago on the expanded map.
@@ -195,9 +195,9 @@ Countries produce: oil, tech, agriculture, tourism
 - **Trade System**: Propose trades to other players; recipients see glowing notification badge
 
 ### Key Constants (in gameData.js)
-- Starting Money: $10,000
-- GO Salary: $1,000 + bonuses
-- Sanctions Bail: $700
+- Starting Money: $15,000
+- GO Salary: $2,000 + bonuses
+- Sanctions Bail: $500
 - Influence to Win: 3,000
 
 ## UI Features
@@ -258,8 +258,8 @@ Player avatars are defined in `js/gameData.js` in the `PLAYER_AVATARS` array. Ea
 - **Double migration:** if the new host also disconnects, the same migration logic promotes the next candidate.
 
 ### v1.7 - Economy Rebalance, Liquidation & Bankruptcy Pressure
-- **Softer economy tuning:** `STARTING_MONEY` $10,000, `GO_SALARY` $1,000, `SANCTIONS_BAIL` $700, `INFLUENCE_TO_WIN` 3,000 for better early-game buy capacity without runaway influence wins.
-- **Tax pressure reduced from the prior rebalance:** Import Tariff is now $400 and Luxury Tax is $900 on classic and expanded boards.
+- **Softer economy tuning:** `STARTING_MONEY` $15,000, `GO_SALARY` $2,000, `SANCTIONS_BAIL` $500, `INFLUENCE_TO_WIN` 3,000 for better early-game buy capacity without runaway influence wins.
+- **Tax pressure reduced from the prior rebalance:** Import Tariff is now $200 and Luxury Tax is $750 on classic and expanded boards.
 - **Influence pacing reduced:** lower influence from passing GO, property purchases, development, rent collection, and alliance passive gains; this makes influence victories much less common.
 - **Debt is now real:** payments can drive money below zero; players must liquidate assets to recover, and cannot end their turn while insolvent.
 - **No round upkeep costs:** maintenance drain was removed after playtests showed early-game purchasing became too constrained.

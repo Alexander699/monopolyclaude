@@ -190,7 +190,7 @@ export class GameEngine {
 
     if (space.type === 'infrastructure') {
       const infraCount = this.getInfrastructureCount(space.owner);
-      return diceTotal * (infraCount >= 2 ? 8 : 4);
+      return diceTotal * (infraCount >= 2 ? 10 : 5);
     }
 
     if (space.type === 'country') {
@@ -428,7 +428,7 @@ export class GameEngine {
         break;
 
       case 'freetrade':
-        const bonus = 75;
+        const bonus = 150;
         this.adjustMoney(player, bonus);
         player.influence += 4;
         this.log(`${player.name} enters the Free Trade Zone! Collects $${bonus} and 4 influence.`, 'success');
@@ -1029,11 +1029,11 @@ export class GameEngine {
         break;
 
       case 'summit':
-        // Cost: 150 influence. All players gain $150
+        // Cost: 150 influence. All players gain $200
         if (player.influence < 150) return false;
         player.influence -= 150;
-        this.getActivePlayers().forEach(p => this.adjustMoney(p, 150));
-        this.log(`${player.name} calls a Summit Meeting! All players receive $150.`, 'influence');
+        this.getActivePlayers().forEach(p => this.adjustMoney(p, 200));
+        this.log(`${player.name} calls a Summit Meeting! All players receive $200.`, 'influence');
         break;
 
       case 'development_grant':
@@ -1112,28 +1112,28 @@ export class GameEngine {
 
       // Alliance bonuses per round
       this.getActivePlayers().forEach(player => {
-        // Oil Nations: $130/turn if complete
+        // Oil Nations: $200/turn if complete
         if (this.hasCompleteAlliance(player.id, 'OIL_NATIONS')) {
-          this.adjustMoney(player, 130);
-          this.log(`${player.name} collects $130 from Oil Royalties!`, 'success');
+          this.adjustMoney(player, 200);
+          this.log(`${player.name} collects $200 from Oil Royalties!`, 'success');
         }
         // Eastern Partnership: 12 influence/turn
         if (this.hasCompleteAlliance(player.id, 'EASTERN')) {
           player.influence += 12;
         }
-        // African Rising: $100/turn
+        // African Rising: $150/turn
         if (this.hasCompleteAlliance(player.id, 'AFRICAN_RISING')) {
-          this.adjustMoney(player, 100);
-          this.log(`${player.name} collects $100 from Tourism Income!`, 'success');
+          this.adjustMoney(player, 150);
+          this.log(`${player.name} collects $150 from Tourism Income!`, 'success');
         }
         // Americas: free upgrade handled via flag
         if (this.hasCompleteAlliance(player.id, 'AMERICAS')) {
           this.state.pendingFreeUpgrade = player.id;
         }
-        // Pacific Islands: $80/turn tourism boost
+        // Pacific Islands: $120/turn tourism boost
         if (this.hasCompleteAlliance(player.id, 'PACIFIC_ISLANDS')) {
-          this.adjustMoney(player, 80);
-          this.log(`${player.name} collects $80 from Pacific Tourism Boost!`, 'success');
+          this.adjustMoney(player, 120);
+          this.log(`${player.name} collects $120 from Pacific Tourism Boost!`, 'success');
         }
         // Nordic Council: +20 influence/turn
         if (this.hasCompleteAlliance(player.id, 'NORDIC')) {
