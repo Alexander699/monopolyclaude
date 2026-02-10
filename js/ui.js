@@ -732,6 +732,76 @@ function joinOnlineGame(name, code) {
         addChatMessage(data);
         render();
         break;
+      case 'promote-to-host': {
+        console.log('[UI-CLIENT] === PROMOTED TO HOST ===');
+
+        // Cancel any in-progress animations
+        movementAnimationInProgress = false;
+        pendingRenderAfterAnimation = false;
+        pendingPostMoveSounds = [];
+        diceAnimationInProgress = false;
+        animatingDice = false;
+
+        // Use full state from server backup, fall back to current engine state
+        let fullState = data.fullState;
+        if (!fullState && engine) {
+          console.warn('[UI] No full state backup from server, using current engine state');
+          fullState = JSON.parse(JSON.stringify(engine.state));
+        }
+        if (!fullState) {
+          console.error('[UI] No state available for host migration!');
+          break;
+        }
+
+        // Reconstruct GameEngine with full state (including card decks)
+        engine = new GameEngine(fullState);
+
+        // Find our localPlayerId from assignments
+        if (data.playerAssignments && network) {
+          const myAssignment = data.playerAssignments.find(a => a.clientId === network.clientId);
+          if (myAssignment) {
+            localPlayerId = myAssignment.localId;
+          }
+        }
+
+        // Register host-pattern callbacks: render + broadcast state
+        engine.on(() => {
+          render();
+          if (network && network.isHost) {
+            network.broadcastState(engine.state);
+          }
+        });
+        engine.onAnimation((type, d) => handleAnimation(type, d));
+
+        // Update UI state flags
+        lobbyIsHost = true;
+
+        // Register host-only socket listeners (game-action, player-connection, player-kicked)
+        network.registerHostListeners();
+
+        // Log the migration event in the game log
+        engine.log('Host migration complete — you are now the game host.', 'success');
+
+        // Rebuild ownership tracking and render
+        knownOwners = new Set();
+        engine.state.board.forEach((space, i) => {
+          if (space.owner) knownOwners.add(i);
+        });
+        render();
+
+        // Broadcast current state to all clients so they get a fresh sync
+        if (network && network.isHost) {
+          network.broadcastState(engine.state);
+        }
+        break;
+      }
+      case 'host-migrated':
+        console.log('[UI-CLIENT] Host migration occurred. New host:', data.newHostName);
+        if (engine) {
+          engine.log(`Host migrated: ${data.newHostName} is now the host.`, 'warning');
+          render();
+        }
+        break;
       case 'kicked':
         resetToLobby(data.message || 'You were removed by the host.');
         break;

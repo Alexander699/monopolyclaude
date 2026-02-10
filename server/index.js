@@ -84,6 +84,71 @@ function findMemberBySocketId(room, socketId) {
   return null;
 }
 
+function attemptHostMigration(roomCode) {
+  const room = rooms.get(roomCode);
+  if (!room || !room.started) return;
+
+  // Find best candidate: first connected, non-kicked member sorted by playerIndex
+  const candidates = Array.from(room.members.values())
+    .filter(m => m.connected && !m.kicked && m.clientId !== room.hostClientId)
+    .sort((a, b) => (a.playerIndex ?? 999) - (b.playerIndex ?? 999));
+
+  if (candidates.length === 0) {
+    // No connected clients — keep room alive briefly for host reconnect
+    room.hostSocketId = null;
+    log(`Host left room ${roomCode} - no candidates, awaiting reconnect (60s)`);
+
+    room.migrationTimeout = setTimeout(() => {
+      const r = rooms.get(roomCode);
+      if (r && !r.hostSocketId) {
+        log(`Migration timeout: closing room ${roomCode}`);
+        io.to(roomCode).emit('error-msg', {
+          message: 'Host disconnected and no players available. Session ended.'
+        });
+        rooms.delete(roomCode);
+      }
+    }, 60000);
+    return;
+  }
+
+  const promoted = candidates[0];
+  const oldHostClientId = room.hostClientId;
+  const oldHostMember = room.members.get(oldHostClientId);
+
+  // Update host identity
+  room.hostSocketId = promoted.socketId;
+  room.hostClientId = promoted.clientId;
+  promoted.isHost = true;
+  if (oldHostMember) oldHostMember.isHost = false;
+
+  log(`Host migrated in room ${roomCode}: "${promoted.name}" is now host`);
+
+  // Send promote-to-host to new host with full state backup
+  io.to(promoted.socketId).emit('promote-to-host', {
+    fullState: room.fullStateBackup,
+    playerAssignments: Array.from(room.playerAssignments.entries()).map(
+      ([cid, a]) => ({ clientId: cid, ...a })
+    ),
+    participants: orderedMembers(room).map(m => ({
+      name: m.name,
+      clientId: m.clientId,
+      connected: !!m.connected,
+      playerId: m.playerId || null,
+      playerIndex: Number.isInteger(m.playerIndex) ? m.playerIndex : null
+    }))
+  });
+
+  // Notify all other clients about the migration
+  for (const member of orderedMembers(room)) {
+    if (member.clientId === promoted.clientId || !member.connected || !member.socketId) continue;
+    io.to(member.socketId).emit('host-migrated', {
+      newHostName: promoted.name,
+      newHostClientId: promoted.clientId,
+      oldHostName: oldHostMember?.name || 'Host'
+    });
+  }
+}
+
 // Health check
 app.get('/', (req, res) => {
   res.json({ status: 'ok', rooms: rooms.size });
@@ -106,7 +171,9 @@ io.on('connection', (socket) => {
       started: false,
       createdAt: Date.now(),
       latestState: null,
-      playerAssignments: new Map()
+      fullStateBackup: null,
+      playerAssignments: new Map(),
+      migrationTimeout: null
     };
 
     room.members.set(resolvedClientId, {
@@ -168,6 +235,58 @@ io.on('connection', (socket) => {
       socket.join(roomCode);
 
       log(`"${existingSeat.name}" rejoined room ${roomCode}`);
+
+      // Check if this is the old host reconnecting while no host is active
+      if (!room.hostSocketId && existingSeat.clientId === room.hostClientId) {
+        // Old host reconnects before migration timeout — re-promote them
+        if (room.migrationTimeout) {
+          clearTimeout(room.migrationTimeout);
+          room.migrationTimeout = null;
+        }
+        room.hostSocketId = socket.id;
+        existingSeat.isHost = true;
+        log(`Old host "${existingSeat.name}" reclaimed host in room ${roomCode}`);
+
+        const assignment = room.playerAssignments.get(resolvedClientId);
+        socket.emit('joined', { ...rosterPayload(room), rejoined: true, clientId: resolvedClientId });
+        if (assignment && room.fullStateBackup) {
+          io.to(socket.id).emit('promote-to-host', {
+            fullState: room.fullStateBackup,
+            playerAssignments: Array.from(room.playerAssignments.entries()).map(
+              ([cid, a]) => ({ clientId: cid, ...a })
+            ),
+            participants: orderedMembers(room).map(m => ({
+              name: m.name,
+              clientId: m.clientId,
+              connected: !!m.connected,
+              playerId: m.playerId || null,
+              playerIndex: Number.isInteger(m.playerIndex) ? m.playerIndex : null
+            }))
+          });
+        } else if (assignment && room.latestState) {
+          io.to(socket.id).emit('promote-to-host', {
+            fullState: room.latestState,
+            playerAssignments: Array.from(room.playerAssignments.entries()).map(
+              ([cid, a]) => ({ clientId: cid, ...a })
+            ),
+            participants: orderedMembers(room).map(m => ({
+              name: m.name,
+              clientId: m.clientId,
+              connected: !!m.connected,
+              playerId: m.playerId || null,
+              playerIndex: Number.isInteger(m.playerIndex) ? m.playerIndex : null
+            }))
+          });
+        }
+
+        socket.to(roomCode).emit('player-joined', {
+          ...rosterPayload(room),
+          newPlayer: existingSeat.name,
+          reconnected: true
+        });
+        return;
+      }
+
       socket.emit('joined', { ...rosterPayload(room), rejoined: true, clientId: resolvedClientId });
 
       const assignment = room.playerAssignments.get(resolvedClientId);
@@ -302,7 +421,7 @@ io.on('connection', (socket) => {
   socket.on('game-action', (data) => {
     if (!currentRoom) return;
     const room = rooms.get(currentRoom);
-    if (!room || !room.started) return;
+    if (!room || !room.started || !room.hostSocketId) return;
 
     const sender = room.members.get(socket.data.clientId || '');
     if (!sender || sender.kicked || !sender.connected) return;
@@ -318,6 +437,14 @@ io.on('connection', (socket) => {
 
     room.latestState = state || room.latestState;
     socket.to(currentRoom).emit('state-update', { state });
+  });
+
+  // --- Host sends full state backup (for host migration, never relayed) ---
+  socket.on('host-state-backup', ({ state }) => {
+    if (!currentRoom) return;
+    const room = rooms.get(currentRoom);
+    if (!room || room.hostSocketId !== socket.id) return;
+    room.fullStateBackup = state || room.fullStateBackup;
   });
 
   // --- Host broadcasts Global News ---
@@ -395,13 +522,26 @@ io.on('connection', (socket) => {
     if (!room) return;
 
     if (socket.id === room.hostSocketId) {
-      // Host left - end the room.
-      const hostName = room.members.get(room.hostClientId)?.name || 'Host';
-      log(`Host "${hostName}" left room ${currentRoom} - closing room`);
-      io.to(currentRoom).emit('error-msg', {
-        message: 'Host disconnected. The game session has ended.'
-      });
-      rooms.delete(currentRoom);
+      const hostMember = room.members.get(room.hostClientId);
+      if (hostMember) {
+        hostMember.connected = false;
+        hostMember.socketId = null;
+      }
+
+      if (!room.started) {
+        // Lobby phase: close room as before
+        const hostName = hostMember?.name || 'Host';
+        log(`Host "${hostName}" left lobby room ${currentRoom} - closing room`);
+        io.to(currentRoom).emit('error-msg', {
+          message: 'Host disconnected. The lobby has been closed.'
+        });
+        rooms.delete(currentRoom);
+        return;
+      }
+
+      // Active game: attempt host migration
+      log(`Host disconnected from active room ${currentRoom} - attempting migration`);
+      attemptHostMigration(currentRoom);
       return;
     }
 

@@ -26,6 +26,7 @@ export class NetworkManager {
     this.localPlayerId = null;
     this.clientId = this.getOrCreateClientId();
     this.wasKicked = false;
+    this.hostListenersRegistered = false;
   }
 
   getOrCreateClientId() {
@@ -263,6 +264,25 @@ export class NetworkManager {
       callback('animation', data);
     });
 
+    this.socket.on('promote-to-host', (data) => {
+      this.log('=== PROMOTED TO HOST ===');
+      this.isHost = true;
+      if (data.participants) {
+        this.players = data.participants.map(p => ({
+          name: p.name,
+          clientId: p.clientId,
+          playerId: p.playerId,
+          connected: p.connected
+        }));
+      }
+      callback('promote-to-host', data);
+    });
+
+    this.socket.on('host-migrated', (data) => {
+      this.log(`Host migrated: new host is "${data.newHostName}"`);
+      callback('host-migrated', data);
+    });
+
     this.socket.on('kicked', (data) => {
       this.wasKicked = true;
       callback('kicked', data);
@@ -270,7 +290,7 @@ export class NetworkManager {
 
     this.socket.on('disconnect', () => {
       this.log('Disconnected from server', 'warn');
-      if (!this.wasKicked) {
+      if (!this.wasKicked && !this.isHost) {
         callback('error', { message: 'Lost connection to server. The game session has ended.' });
       }
     });
@@ -331,6 +351,9 @@ export class NetworkManager {
         playerAssignments
       });
 
+      // Send full state backup immediately so server has it for host migration
+      this.socket.emit('host-state-backup', { state: JSON.parse(JSON.stringify(state)) });
+
       this.log('=== Game start complete ===');
     }).catch(err => {
       this.log(`FATAL: Failed to start game: ${err.message}`, 'error');
@@ -342,6 +365,8 @@ export class NetworkManager {
   broadcastState(state) {
     if (!this.isHost || !this.socket) return;
     this.socket.emit('state-update', { state: this.stripCardDecks(state) });
+    // Send full state backup (with card decks) for host migration support
+    this.socket.emit('host-state-backup', { state: JSON.parse(JSON.stringify(state)) });
   }
 
   broadcastGlobalNews(card) {
@@ -373,6 +398,27 @@ export class NetworkManager {
     if (this.callback) {
       this.callback('chat', msg);
     }
+  }
+
+  registerHostListeners() {
+    if (!this.socket || this.hostListenersRegistered) return;
+    this.hostListenersRegistered = true;
+
+    const callback = this.callback;
+    if (!callback) return;
+
+    this.socket.on('game-action', (data) => {
+      this.log(`Received action: ${data.actionType}`);
+      callback('action', data);
+    });
+
+    this.socket.on('player-connection', (data) => {
+      callback('player-connection', data);
+    });
+
+    this.socket.on('player-kicked', (data) => {
+      callback('player-kicked', data);
+    });
   }
 
   kickPlayer(playerId) {

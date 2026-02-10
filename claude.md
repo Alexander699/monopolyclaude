@@ -74,6 +74,23 @@ Host processes in GameEngine → Broadcasts state → Server relays to all Clien
 | `player-kicked` | Server→Host | Confirms player kick to host |
 | `kicked` | Server→Client | Notifies kicked client and terminates session |
 | `error-msg` | Server→Client | Error notifications |
+| `host-state-backup` | Host→Server | Full state backup (with card decks) stored on server for host migration; never relayed to clients |
+| `promote-to-host` | Server→Client | Promotes a client to host role with full state backup during host migration |
+| `host-migrated` | Server→Clients | Notifies non-promoted clients that a new host has been selected |
+
+### Host Migration
+When the host disconnects during an active game, the server promotes another connected client to become the new host instead of closing the room:
+
+1. Server marks old host as disconnected
+2. Server finds the best candidate (first connected, non-kicked member by `playerIndex`)
+3. Server sends `promote-to-host` to the new host with full game state (including card decks)
+4. Server sends `host-migrated` to all other clients
+5. New host reconstructs `GameEngine` from full state, registers host callbacks, and resumes
+6. Old host can rejoin later via room code as a regular client (or reclaim host if no migration happened)
+
+**Full state backup**: The host sends unstripped state (with card decks) to the server via `host-state-backup` after every state change. This backup is stored on the server but never relayed to clients, preserving card deck privacy while enabling migration.
+
+**Edge cases**: If no connected clients exist when the host disconnects, the room stays alive for 60 seconds awaiting reconnect. If the old host reconnects before any migration, they reclaim the host role. Double migration works (if the new host also disconnects, the next candidate is promoted).
 
 ### Key Patterns in ui.js
 - `isOnlineClient()` — returns true when playing online as non-host
@@ -231,7 +248,16 @@ Player avatars are defined in `js/gameData.js` in the `PLAYER_AVATARS` array. Ea
 
 ## Recent Changes (Latest First)
 
-### v1.7 - Economy Rebalance, Liquidation & Bankruptcy Pressure (Current)
+### v1.8 - Host Migration (Current)
+- **Host migration:** when the host disconnects during an active game, the server promotes the first connected client to become the new host instead of closing the room. The new host reconstructs the `GameEngine` from a full state backup and resumes the game seamlessly.
+- **Full state backup:** host sends unstripped state (with card decks) to the server via `host-state-backup` after every state change. Stored on server only, never relayed to clients.
+- **New events:** `host-state-backup` (host→server), `promote-to-host` (server→new host), `host-migrated` (server→other clients).
+- **Old host reconnect:** old host can rejoin via room code as a regular client after migration, or reclaim host if no migration candidate was available.
+- **No-candidate fallback:** if no clients are connected when host disconnects, room stays alive 60s for reconnect before cleanup.
+- **Animation safety:** promotion handler cancels any in-progress movement/dice animations to prevent stale DOM state.
+- **Double migration:** if the new host also disconnects, the same migration logic promotes the next candidate.
+
+### v1.7 - Economy Rebalance, Liquidation & Bankruptcy Pressure
 - **Softer economy tuning:** `STARTING_MONEY` $10,000, `GO_SALARY` $1,000, `SANCTIONS_BAIL` $700, `INFLUENCE_TO_WIN` 3,000 for better early-game buy capacity without runaway influence wins.
 - **Tax pressure reduced from the prior rebalance:** Import Tariff is now $400 and Luxury Tax is $900 on classic and expanded boards.
 - **Influence pacing reduced:** lower influence from passing GO, property purchases, development, rent collection, and alliance passive gains; this makes influence victories much less common.
@@ -389,7 +415,7 @@ Player avatars are defined in `js/gameData.js` in the `PLAYER_AVATARS` array. Ea
 - Complete game implementation with all mechanics, local hot-seat multiplayer
 
 ## Known Issues & TODO
-- [ ] Host reconnection recovery (if host refreshes, room still closes; host remains authority process)
+- [x] Host reconnection recovery (host migration: server promotes another client to host when host disconnects)
 - [x] Non-host reconnect after refresh (same browser/device via persistent `clientId`)
 - [ ] Turn timer option
 - [ ] Spectator mode
