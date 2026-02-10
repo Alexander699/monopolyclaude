@@ -86,7 +86,7 @@ function findMemberBySocketId(room, socketId) {
 
 function attemptHostMigration(roomCode) {
   const room = rooms.get(roomCode);
-  if (!room || !room.started) return;
+  if (!room || !room.started) return false;
 
   // Find best candidate: first connected, non-kicked member sorted by playerIndex
   const candidates = Array.from(room.members.values())
@@ -98,17 +98,24 @@ function attemptHostMigration(roomCode) {
     room.hostSocketId = null;
     log(`Host left room ${roomCode} - no candidates, awaiting reconnect (60s)`);
 
-    room.migrationTimeout = setTimeout(() => {
-      const r = rooms.get(roomCode);
-      if (r && !r.hostSocketId) {
-        log(`Migration timeout: closing room ${roomCode}`);
-        io.to(roomCode).emit('error-msg', {
-          message: 'Host disconnected and no players available. Session ended.'
-        });
-        rooms.delete(roomCode);
-      }
-    }, 60000);
-    return;
+    if (!room.migrationTimeout) {
+      room.migrationTimeout = setTimeout(() => {
+        const r = rooms.get(roomCode);
+        if (r && !r.hostSocketId) {
+          log(`Migration timeout: closing room ${roomCode}`);
+          io.to(roomCode).emit('error-msg', {
+            message: 'Host disconnected and no players available. Session ended.'
+          });
+          rooms.delete(roomCode);
+        }
+      }, 60000);
+    }
+    return false;
+  }
+
+  if (room.migrationTimeout) {
+    clearTimeout(room.migrationTimeout);
+    room.migrationTimeout = null;
   }
 
   const promoted = candidates[0];
@@ -147,6 +154,8 @@ function attemptHostMigration(roomCode) {
       oldHostName: oldHostMember?.name || 'Host'
     });
   }
+
+  return true;
 }
 
 // Health check
@@ -289,16 +298,25 @@ io.on('connection', (socket) => {
 
       socket.emit('joined', { ...rosterPayload(room), rejoined: true, clientId: resolvedClientId });
 
-      const assignment = room.playerAssignments.get(resolvedClientId);
-      if (assignment && room.latestState) {
-        io.to(socket.id).emit('game-start', {
-          state: room.latestState,
-          localId: assignment.localId,
-          playerIndex: assignment.playerIndex,
-          rejoined: true
-        });
-      } else {
-        socket.emit('error-msg', { message: 'Reconnected, waiting for host sync...' });
+      // If no host is active (all players had disconnected), retry migration now.
+      if (!room.hostSocketId) {
+        log(`No active host in room ${roomCode} after "${existingSeat.name}" rejoined - retrying migration`);
+        attemptHostMigration(roomCode);
+      }
+
+      const becameHost = room.hostSocketId === socket.id;
+      if (!becameHost) {
+        const assignment = room.playerAssignments.get(resolvedClientId);
+        if (assignment && room.latestState) {
+          io.to(socket.id).emit('game-start', {
+            state: room.latestState,
+            localId: assignment.localId,
+            playerIndex: assignment.playerIndex,
+            rejoined: true
+          });
+        } else {
+          socket.emit('error-msg', { message: 'Reconnected, waiting for host sync...' });
+        }
       }
 
       if (room.hostSocketId && room.hostSocketId !== socket.id) {
@@ -425,8 +443,19 @@ io.on('connection', (socket) => {
 
     const sender = room.members.get(socket.data.clientId || '');
     if (!sender || sender.kicked || !sender.connected) return;
+    if (!data || typeof data !== 'object' || typeof data.actionType !== 'string') return;
 
-    io.to(room.hostSocketId).emit('game-action', data);
+    const relayedAction = {
+      ...data,
+      fromClientId: sender.clientId
+    };
+    if (sender.playerId) {
+      relayedAction.fromPlayerId = sender.playerId;
+    } else if (!relayedAction.fromPlayerId) {
+      relayedAction.fromPlayerId = null;
+    }
+
+    io.to(room.hostSocketId).emit('game-action', relayedAction);
   });
 
   // --- Host broadcasts state to clients ---

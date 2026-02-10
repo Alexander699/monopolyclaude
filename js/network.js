@@ -432,6 +432,9 @@ export class NetworkManager {
       this.socket.disconnect();
       this.socket = null;
     }
+    this.isHost = false;
+    this.callback = null;
+    this.hostListenersRegistered = false;
     this.players = [];
     this.localPlayerId = null;
     this.roomCode = '';

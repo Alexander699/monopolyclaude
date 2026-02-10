@@ -764,6 +764,27 @@ function joinOnlineGame(name, code) {
           }
         }
 
+        // Reconcile player connectivity from server room membership.
+        if (Array.isArray(data.participants)) {
+          const connectedByPlayerId = new Map();
+          data.participants.forEach((participant) => {
+            if (participant?.playerId) {
+              connectedByPlayerId.set(participant.playerId, participant.connected !== false);
+            }
+          });
+          engine.state.players.forEach((player) => {
+            if (connectedByPlayerId.has(player.id)) {
+              player.connected = connectedByPlayerId.get(player.id);
+            }
+          });
+        }
+
+        // Rebuild ownership tracking before any emitted re-render.
+        knownOwners = new Set();
+        engine.state.board.forEach((space, i) => {
+          if (space.owner) knownOwners.add(i);
+        });
+
         // Register host-pattern callbacks: render + broadcast state
         engine.on(() => {
           render();
@@ -780,18 +801,23 @@ function joinOnlineGame(name, code) {
         network.registerHostListeners();
 
         // Log the migration event in the game log
-        engine.log('Host migration complete — you are now the game host.', 'success');
+        engine.log('Host migration complete - you are now the game host.', 'success');
 
-        // Rebuild ownership tracking and render
-        knownOwners = new Set();
-        engine.state.board.forEach((space, i) => {
-          if (space.owner) knownOwners.add(i);
-        });
-        render();
+        // If the disconnected host was active, skip their turn immediately.
+        let skippedDisconnectedTurn = false;
+        const activeAfterMigration = engine.getCurrentPlayer();
+        if (activeAfterMigration && activeAfterMigration.connected === false && !activeAfterMigration.bankrupt && !engine.state.gameOver) {
+          skippedDisconnectedTurn = true;
+          engine.log(`${activeAfterMigration.name} is disconnected. Skipping their turn.`, 'warning');
+          engine.state.lastDice = null;
+          engine.nextTurn();
+        }
 
-        // Broadcast current state to all clients so they get a fresh sync
-        if (network && network.isHost) {
-          network.broadcastState(engine.state);
+        if (!skippedDisconnectedTurn) {
+          render();
+          if (network && network.isHost) {
+            network.broadcastState(engine.state);
+          }
         }
         break;
       }
@@ -1975,11 +2001,20 @@ function handleHostPlayerConnection(data) {
   const isConnected = data.connected !== false;
   if ((player.connected !== false) === isConnected) return;
 
+  const wasCurrentTurn = engine.getCurrentPlayer()?.id === player.id;
   player.connected = isConnected;
   engine.log(
     `${player.name} ${isConnected ? 'reconnected.' : 'disconnected.'}`,
     isConnected ? 'success' : 'warning'
   );
+
+  if (!isConnected && wasCurrentTurn && !engine.state.gameOver) {
+    engine.log(`${player.name}'s turn was skipped due to disconnect.`, 'warning');
+    engine.state.lastDice = null;
+    engine.nextTurn();
+    return;
+  }
+
   engine.emit();
 }
 
