@@ -163,26 +163,26 @@ Additional cities in expanded: Yerevan (EASTERN, also on classic), Riyadh (OIL_N
 Own ALL countries in an alliance to unlock the bonus (like Monopoly color sets).
 Must complete an alliance before developing (building) on any of its countries.
 
-| Alliance | Countries (Classic) | Countries (Expanded) | Completion Bonus |
-|----------|-----------|-----------|------------------|
-| EASTERN | Gyumri, Kapan, Yerevan | Same | +12 influence/turn |
-| AFRICAN_RISING | Alexandria, Giza, Cairo | Same | $150 tourism income/turn |
-| SOUTH_ASIAN | Mumbai, Bengaluru, Delhi | Same | +$200 on all rent collected |
-| BRICS | Salvador, Rio, Sao Paulo | Same | Extra influence from rent collected |
-| EU | Paris, Toulouse, Lyon | Same | Double rent on developed properties |
-| ASIAN_TIGERS | Tel Aviv, Haifa, Jerusalem | Same | Tech Hub costs -50% |
-| OIL_NATIONS | Dubai, Riyadh, Abu Dhabi | Same | $200 oil royalties/turn |
-| AMERICAS | New York, San Francisco | + Chicago | Free development upgrade/round |
-| PACIFIC_ISLANDS | — | Auckland, Wellington, Queenstown | $120 tourism boost/turn |
-| NORDIC | — | Stockholm, Gothenburg, Malmo | +20 influence/turn |
+| Alliance (ID) | Display Name | Countries (Classic) | Countries (Expanded) | Completion Bonus |
+|----------|-----------|-----------|-----------|------------------|
+| EASTERN | Armenia | Gyumri, Kapan, Yerevan | Same | +12 influence/turn |
+| AFRICAN_RISING | Egypt | Alexandria, Giza, Cairo | Same | $150 tourism income/turn |
+| SOUTH_ASIAN | India | Mumbai, Bengaluru, Delhi | Same | +$200 on all rent collected |
+| BRICS | Brazil | Salvador, Rio, Sao Paulo | Same | Extra influence from rent collected |
+| EU | France | Paris, Toulouse, Lyon | Same | Double rent on developed properties |
+| ASIAN_TIGERS | Israel | Tel Aviv, Haifa, Jerusalem | Same | Tech Hub costs -50% |
+| OIL_NATIONS | Arabian Peninsula | Dubai, Riyadh, Abu Dhabi | Same | $200 oil royalties/turn |
+| AMERICAS | United States | New York, San Francisco | + Chicago | Free development upgrade/round |
+| PACIFIC_ISLANDS | New Zealand | — | Auckland, Wellington, Queenstown | $120 tourism boost/turn |
+| NORDIC | Sweden | — | Stockholm, Gothenburg, Malmo | +20 influence/turn |
 
-**Note:** PACIFIC_ISLANDS and NORDIC alliances only appear on the expanded "World Domination" map. AMERICAS gains Chicago on the expanded map.
+**Note:** New Zealand and Sweden alliances only appear on the expanded "World Domination" map. United States gains Chicago on the expanded map.
 
 ### Development Tiers (replaces houses/hotels)
-1. **Local Markets** (🏪) - Cost: 50% of price, 2x rent
-2. **Factories** (🏭) - Cost: 75% of price, 3x rent
-3. **Tech Hubs** (🏙️) - Cost: 100% of price, 5x rent
-4. **Economic Capital** (🏛️) - Cost: 150% of price, 8x rent (max 1 per alliance)
+1. **Local Markets** (🏪) - Cost: 40% of price, 2x rent
+2. **Factories** (🏭) - Cost: 60% of price, 3x rent
+3. **Tech Hubs** (🏙️) - Cost: 80% of price, 5x rent
+4. **Economic Capital** (🏛️) - Cost: 120% of price, 8x rent (max 1 per alliance)
 
 ### Resources
 Countries produce: oil, tech, agriculture, tourism

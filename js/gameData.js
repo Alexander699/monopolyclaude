@@ -5,79 +5,79 @@
 export const ALLIANCES = {
   EU: {
     id: 'EU',
-    name: 'European Union',
+    name: 'France',
     color: '#003399',
     lightColor: '#4d79cc',
-    bonus: 'Double rent from all EU cities',
+    bonus: 'Double rent on developed properties',
     resource: 'tech'
   },
   EASTERN: {
     id: 'EASTERN',
-    name: 'Eastern Partnership',
+    name: 'Armenia',
     color: '#8B4513',
     lightColor: '#b87333',
-    bonus: 'Earn 12 influence per turn',
+    bonus: '+12 influence per turn',
     resource: 'agriculture'
   },
   ASIAN_TIGERS: {
     id: 'ASIAN_TIGERS',
-    name: 'Asian Tigers',
+    name: 'Israel',
     color: '#DC143C',
     lightColor: '#ff4d6a',
-    bonus: 'Tech Hub costs reduced by 50%',
+    bonus: 'Tech Hub costs -50%',
     resource: 'tech'
   },
   SOUTH_ASIAN: {
     id: 'SOUTH_ASIAN',
-    name: 'South Asian Union',
+    name: 'India',
     color: '#FF8C00',
     lightColor: '#ffb347',
-    bonus: 'Collect $200 when any player lands on your properties',
+    bonus: '+$200 on all rent collected',
     resource: 'agriculture'
   },
   BRICS: {
     id: 'BRICS',
-    name: 'BRICS Nations',
+    name: 'Brazil',
     color: '#228B22',
     lightColor: '#4dbd4d',
-    bonus: 'Extra influence from rent collected',
+    bonus: 'Extra influence from rent',
     resource: 'oil'
   },
   OIL_NATIONS: {
     id: 'OIL_NATIONS',
-    name: 'Oil Nations',
+    name: 'Arabian Peninsula',
     color: '#000000',
     lightColor: '#4d4d4d',
-    bonus: 'Collect oil royalties: $200/turn',
+    bonus: '$200 oil royalties/turn',
     resource: 'oil'
   },
   AMERICAS: {
     id: 'AMERICAS',
-    name: 'Americas',
+    name: 'United States',
     color: '#4169E1',
     lightColor: '#7094e8',
-    bonus: 'Free development upgrade once per round',
+    bonus: 'Free upgrade once per round',
     resource: 'tourism'
   },
   AFRICAN_RISING: {
     id: 'AFRICAN_RISING',
-    name: 'African Rising',
+    name: 'Egypt',
     color: '#9932CC',
     lightColor: '#b366d9',
-    bonus: 'Tourism income: $150/turn',
+    bonus: '$150 tourism income/turn',
     resource: 'tourism'
   },
   PACIFIC_ISLANDS: {
     id: 'PACIFIC_ISLANDS',
-    name: 'Pacific Islands',
+    name: 'New Zealand',
     color: '#00CED1',
     lightColor: '#40E0D0',
-    bonus: 'Tourism boost: $120/turn',
+    bonus: '$120 tourism boost/turn',
     resource: 'tourism'
   },
   NORDIC: {
     id: 'NORDIC',
-    name: 'Nordic Council',
+    name: 'Sweden',
     color: '#4682B4',
     lightColor: '#6CA6CD',
     bonus: '+20 influence per turn',
@@ -86,10 +86,10 @@ export const ALLIANCES = {
 };
 
 export const RESOURCES = {
-  oil: { name: 'Oil', icon: '🛢️', description: '+10% rent for each oil city owned' },
-  tech: { name: 'Technology', icon: '💻', description: '+10% rent for each tech city owned' },
-  agriculture: { name: 'Agriculture', icon: '🌾', description: '+10% rent for each agri city owned' },
-  tourism: { name: 'Tourism', icon: '✈️', description: '+10% rent for each tourism city owned' }
+  oil: { name: 'Oil', icon: '🛢️', description: '+5% rent on all your properties' },
+  tech: { name: 'Technology', icon: '💻', description: '+5% rent on all your properties' },
+  agriculture: { name: 'Agriculture', icon: '🌾', description: '+5% rent on all your properties' },
+  tourism: { name: 'Tourism', icon: '✈️', description: '+5% rent on all your properties' }
 };
 
 export const DEVELOPMENT_TIERS = [

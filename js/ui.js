@@ -862,6 +862,7 @@ function renderGame() {
           <div class="player-panel-list">
             ${state.players.map(p => renderPlayerCard(p, currentPlayer.id === p.id)).join('')}
           </div>
+          ${renderActiveEffectsPanel(state)}
           <div class="player-panel-footer">
             <div class="player-panel-round">Round ${state.roundNumber} · Turn ${state.turnNumber}</div>
             <div class="player-panel-tools">
@@ -944,6 +945,29 @@ function renderPlayerCard(player, isCurrent) {
     }
   }
 
+  // Build active modifiers line
+  let modifiersHtml = '';
+  if (engine && !player.bankrupt && player.properties.length > 0) {
+    const mods = [];
+    // Resource diversity bonus
+    const resourceBonus = engine.getResourceBonus(player.id);
+    if (resourceBonus > 0) {
+      const ownedResources = new Set();
+      engine.state.board.filter(s => s.owner === player.id && s.resource).forEach(s => ownedResources.add(s.resource));
+      const icons = [...ownedResources].map(r => RESOURCES[r]?.icon || '').join('');
+      mods.push(`<span class="modifier-tag modifier-positive" title="Resource diversity: +${Math.round(resourceBonus * 100)}% rent (${ownedResources.size} unique types)">${icons} +${Math.round(resourceBonus * 100)}%</span>`);
+    }
+    // Embargo on this player
+    for (const eff of engine.state.activeEffects) {
+      if (eff.type === 'embargo' && eff.targetId === player.id) {
+        mods.push(`<span class="modifier-tag modifier-negative" title="Trade Embargo: rent disabled this round">⛔ Embargoed</span>`);
+      }
+    }
+    if (mods.length > 0) {
+      modifiersHtml = `<div class="player-modifiers">${mods.join('')}</div>`;
+    }
+  }
+
   return `
     <div class="player-card ${isCurrent ? 'current' : ''} ${player.bankrupt ? 'bankrupt' : ''}"
          style="border-left: 4px solid ${player.color}" data-player-id="${player.id}">
@@ -974,6 +998,7 @@ function renderPlayerCard(player, isCurrent) {
         </div>
       </div>
       ${allianceHtml}
+      ${modifiersHtml}
       ${canKickPlayer ? `
         <div class="player-admin-actions">
           <button class="btn btn-xs btn-danger" data-kick-player="${player.id}">${kickLabel}</button>
@@ -981,6 +1006,56 @@ function renderPlayerCard(player, isCurrent) {
       ` : ''}
     </div>
   `;
+}
+
+function renderActiveEffectsPanel(state) {
+  const items = [];
+
+  // Global active effects
+  for (const eff of state.activeEffects) {
+    const rounds = eff.expiresRound - state.roundNumber;
+    const label = rounds > 0 ? `${rounds}rd left` : 'expiring';
+    switch (eff.type) {
+      case 'half_rent':
+        items.push(`<div class="effect-row"><span class="effect-icon">📉</span> Rent halved globally <span class="effect-duration">${label}</span></div>`);
+        break;
+      case 'tech_double_rent':
+        items.push(`<div class="effect-row"><span class="effect-icon">💻</span> Tech cities 2x rent <span class="effect-duration">${label}</span></div>`);
+        break;
+      case 'tech_half_rent':
+        items.push(`<div class="effect-row"><span class="effect-icon">💻</span> Tech cities ½ rent <span class="effect-duration">${label}</span></div>`);
+        break;
+      case 'embargo': {
+        const target = engine?.getPlayerById(eff.targetId);
+        items.push(`<div class="effect-row"><span class="effect-icon">⛔</span> Embargo on ${target?.name || '?'} <span class="effect-duration">${label}</span></div>`);
+        break;
+      }
+    }
+  }
+
+  // Resource guide
+  const resourceGuide = `<div class="resource-guide">
+    <div class="resource-guide-title">Resources <span class="resource-guide-hint">(diversity bonus)</span></div>
+    <div class="resource-guide-desc">Each unique type you own gives +5% rent on ALL your properties. Max 4 types = +20%.</div>
+    <div class="resource-guide-items">
+      <span title="Oil: owning any oil city unlocks +5%">🛢️ Oil</span>
+      <span title="Tech: owning any tech city unlocks +5%">💻 Tech</span>
+      <span title="Agriculture: owning any agri city unlocks +5%">🌾 Agri</span>
+      <span title="Tourism: owning any tourism city unlocks +5%">✈️ Tour</span>
+    </div>
+  </div>`;
+
+  if (items.length === 0) {
+    return `<div class="active-effects-panel">${resourceGuide}</div>`;
+  }
+
+  return `<div class="active-effects-panel">
+    <div class="effects-section">
+      <div class="effects-title">Active Effects</div>
+      ${items.join('')}
+    </div>
+    ${resourceGuide}
+  </div>`;
 }
 
 function renderCenterActionButton() {
