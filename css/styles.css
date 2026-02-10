@@ -670,6 +670,33 @@ body {
   font-weight: 700;
 }
 
+.player-alliances {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 5px;
+}
+
+.alliance-pill {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--ac, #555);
+  color: #fff;
+  opacity: 0.55;
+  letter-spacing: 0.3px;
+  line-height: 1.4;
+  border: 1px solid transparent;
+}
+
+.alliance-pill.alliance-complete {
+  opacity: 1;
+  border-color: var(--alc, #fff);
+  box-shadow: 0 0 6px var(--alc, #888);
+}
+
 .player-admin-actions {
   margin-top: 6px;
 }

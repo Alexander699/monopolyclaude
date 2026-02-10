@@ -921,6 +921,29 @@ function renderPlayerCard(player, isCurrent) {
   const canKickPlayer = isHostAdmin && player.id !== localPlayerId && !player.bankrupt;
   const kickLabel = player.connected === false ? 'Kick Inactive' : 'Kick Player';
 
+  // Build alliance indicators — only alliances present on the current map
+  let allianceHtml = '';
+  if (engine && !player.bankrupt) {
+    const boardAlliances = new Set();
+    engine.state.board.forEach(s => { if (s.alliance) boardAlliances.add(s.alliance); });
+    const pills = [];
+    for (const allianceId of boardAlliances) {
+      const alliance = ALLIANCES[allianceId];
+      if (!alliance) continue;
+      const { owned, total } = engine.getAllianceCount(player.id, allianceId);
+      if (owned === 0) continue;
+      const isComplete = owned === total;
+      pills.push(`<span class="alliance-pill ${isComplete ? 'alliance-complete' : ''}"
+        style="--ac:${alliance.color};--alc:${alliance.lightColor}"
+        title="${alliance.name}: ${owned}/${total}${isComplete ? ' ✓ ' + alliance.bonus : ''}">
+        ${owned}/${total}
+      </span>`);
+    }
+    if (pills.length > 0) {
+      allianceHtml = `<div class="player-alliances">${pills.join('')}</div>`;
+    }
+  }
+
   return `
     <div class="player-card ${isCurrent ? 'current' : ''} ${player.bankrupt ? 'bankrupt' : ''}"
          style="border-left: 4px solid ${player.color}" data-player-id="${player.id}">
@@ -950,6 +973,7 @@ function renderPlayerCard(player, isCurrent) {
           </div>
         </div>
       </div>
+      ${allianceHtml}
       ${canKickPlayer ? `
         <div class="player-admin-actions">
           <button class="btn btn-xs btn-danger" data-kick-player="${player.id}">${kickLabel}</button>
