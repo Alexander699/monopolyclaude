@@ -294,11 +294,11 @@ export const PLAYER_COLORS = [
 export const PLAYER_AVATARS = [
   { emoji: '🧳', img: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT2QNEWfmzP8VFJykUrurNp2mT_LHW5W7_7rg&s' },
   { emoji: '📋', img: 'https://shapes.inc/api/public/avatar/bibinetanyahu'},
-  { emoji: '🎩', img: 'https://cafebazaar.ir/app/com.narendramodiapp?l=en'},
+  { emoji: '🎩', img: 'https://at-cdn-s03.audiotool.com/2025/11/30/documents/pmc5fyvx/0/cover256x256-4d98191aa85a46129e8b57ab509f39d9.jpg'},
   { emoji: '👔', img: 'https://d3g9pb5nvr3u7.cloudfront.net/authors/529fac41929d4c756b000194/-764404409/256.jpg' },
   { emoji: '🗂️', img: 'https://www.vg.no/vgc/spesial/2026/berikelser-jn/assets/gfx/epstein/epstein.png' },
-  { emoji: '💼', img: 'https://api.dicebear.com/9.x/bottts-neutral/svg?seed=player6' },
-  { emoji: '📊', img: 'https://api.dicebear.com/9.x/bottts-neutral/svg?seed=player7' },
+  { emoji: '💼', img: 'https://www.gp.se/images/article/664e0dd7-7b4f-5bd5-8c26-7ccc104fc5bf/images/1d-SquUt1m4eXzyjHJjFbrmR6F7A-SQUARE.jpg?width=256&quality=75' },
+  { emoji: '📊', img: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQNR9mVxHLrZWAjlddsXY0ZgMtGsn7xLEpwDA&s' },
   { emoji: '🏆', img: 'https://api.dicebear.com/9.x/bottts-neutral/svg?seed=player8' },
 ];
 

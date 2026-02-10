@@ -100,6 +100,15 @@ export class SoundManager {
     setTimeout(() => this.playTone(659, 0.2, 'triangle', 0.5), 200);
   }
 
+  playMonopoly() {
+    if (!this.ctx) return;
+    const notes = [392, 494, 587, 784];
+    notes.forEach((freq, i) => {
+      const duration = i === notes.length - 1 ? 0.3 : 0.16;
+      setTimeout(() => this.playTone(freq, duration, 'triangle', 0.48), i * 95);
+    });
+  }
+
   // Simple background music using oscillators
   startMusic() {
     if (!this.musicEnabled || !this.ctx || this.musicNode) return;

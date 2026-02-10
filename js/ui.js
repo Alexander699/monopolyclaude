@@ -91,6 +91,10 @@ let selectedSpaceInfo = null; // Space ID for info modal (null = hidden)
 let selectedMapId = 'classic'; // Map selection (classic or expanded)
 let knownOwners = new Set(); // Track space IDs with known ownership (prevents animation replay)
 let prevPlayerSnapshots = {}; // Track previous money/influence/property counts for change animations
+const MONOPOLY_HIGHLIGHT_MS = 1800;
+let knownCompletedAlliances = new Set(); // Track player+alliance completion state transitions
+let monopolyHighlightsBySpace = new Map(); // spaceId => { color, expiresAt }
+let monopolyHighlightTimer = null;
 
 function normalizeLobbyAvatarSelections(count) {
   const targetCount = Math.max(0, Number.isInteger(count) ? count : 0);
@@ -277,6 +281,127 @@ function savePlayerSnapshot() {
   });
 }
 
+function getCompletedAllianceKeys() {
+  const complete = new Set();
+  if (!engine || !engine.state || !engine.state.board || !engine.state.players) return complete;
+
+  const alliancesOnBoard = new Set();
+  engine.state.board.forEach(space => {
+    if (space.type === 'country' && space.alliance) {
+      alliancesOnBoard.add(space.alliance);
+    }
+  });
+
+  alliancesOnBoard.forEach(allianceId => {
+    engine.state.players.forEach(player => {
+      if (!player || player.bankrupt) return;
+      if (engine.hasCompleteAlliance(player.id, allianceId)) {
+        complete.add(`${player.id}:${allianceId}`);
+      }
+    });
+  });
+
+  return complete;
+}
+
+function resetMonopolyTracking(seedFromState = false) {
+  if (monopolyHighlightTimer) {
+    clearTimeout(monopolyHighlightTimer);
+    monopolyHighlightTimer = null;
+  }
+  monopolyHighlightsBySpace = new Map();
+  knownCompletedAlliances = seedFromState ? getCompletedAllianceKeys() : new Set();
+}
+
+function getMonopolyHighlight(spaceId) {
+  const highlight = monopolyHighlightsBySpace.get(spaceId);
+  if (!highlight) return null;
+  if (highlight.expiresAt <= Date.now()) {
+    monopolyHighlightsBySpace.delete(spaceId);
+    return null;
+  }
+  return highlight;
+}
+
+function scheduleMonopolyHighlightTimer() {
+  if (monopolyHighlightTimer) {
+    clearTimeout(monopolyHighlightTimer);
+    monopolyHighlightTimer = null;
+  }
+
+  if (monopolyHighlightsBySpace.size === 0) return;
+
+  const now = Date.now();
+  let nextExpiry = Infinity;
+
+  monopolyHighlightsBySpace.forEach((highlight, spaceId) => {
+    if (!highlight || highlight.expiresAt <= now) {
+      monopolyHighlightsBySpace.delete(spaceId);
+      return;
+    }
+    if (highlight.expiresAt < nextExpiry) {
+      nextExpiry = highlight.expiresAt;
+    }
+  });
+
+  if (monopolyHighlightsBySpace.size === 0 || nextExpiry === Infinity) return;
+
+  const delay = Math.max(16, nextExpiry - now + 40);
+  monopolyHighlightTimer = setTimeout(() => {
+    const currentTime = Date.now();
+    monopolyHighlightsBySpace.forEach((highlight, spaceId) => {
+      if (!highlight || highlight.expiresAt <= currentTime) {
+        monopolyHighlightsBySpace.delete(spaceId);
+      }
+    });
+
+    if (appScreen === 'game' && !movementAnimationInProgress) {
+      render();
+    }
+    scheduleMonopolyHighlightTimer();
+  }, delay);
+}
+
+function highlightCompletedAlliance(playerId, allianceId, color) {
+  if (!engine || !engine.state || !engine.state.board) return;
+  const expiresAt = Date.now() + MONOPOLY_HIGHLIGHT_MS;
+
+  engine.state.board.forEach((space, spaceId) => {
+    if (space.type === 'country' && space.alliance === allianceId && space.owner === playerId) {
+      monopolyHighlightsBySpace.set(spaceId, { color, expiresAt });
+    }
+  });
+}
+
+function detectNewMonopolies() {
+  if (!engine || appScreen !== 'game') return;
+
+  const currentCompletions = getCompletedAllianceKeys();
+  const newCompletions = [];
+
+  currentCompletions.forEach(key => {
+    if (knownCompletedAlliances.has(key)) return;
+    const splitAt = key.indexOf(':');
+    if (splitAt <= 0) return;
+    newCompletions.push({
+      playerId: key.slice(0, splitAt),
+      allianceId: key.slice(splitAt + 1)
+    });
+  });
+
+  if (newCompletions.length > 0) {
+    newCompletions.forEach(({ playerId, allianceId }) => {
+      const player = engine.getPlayerById(playerId);
+      if (!player) return;
+      highlightCompletedAlliance(playerId, allianceId, player.color || '#ffffff');
+    });
+    sound.playMonopoly();
+    scheduleMonopolyHighlightTimer();
+  }
+
+  knownCompletedAlliances = currentCompletions;
+}
+
 function render() {
   const app = document.getElementById('app');
   if (!app) return;
@@ -312,6 +437,7 @@ function render() {
       attachLobbyEvents();
       break;
     case 'game':
+      detectNewMonopolies();
       app.innerHTML = renderGame();
       attachGameEvents();
       showPlayerChangeAnimations();
@@ -642,6 +768,7 @@ function startLocalGame(names, avatarIndices = []) {
   engine.onAnimation((type, data) => handleAnimation(type, data));
 
   knownOwners = new Set();
+  resetMonopolyTracking(true);
   appScreen = 'game';
   sound.playClick();
   render();
@@ -694,6 +821,7 @@ function hostOnlineGame(name) {
         });
         engine.onAnimation((type, d) => handleAnimation(type, d));
         knownOwners = new Set();
+        resetMonopolyTracking(true);
         appScreen = 'game';
         console.log('[UI-HOST] Switching to game screen');
         render();
@@ -783,6 +911,7 @@ function joinOnlineGame(name, code) {
         engine.on(() => render());
         engine.onAnimation((type, d) => handleAnimation(type, d));
         knownOwners = new Set();
+        resetMonopolyTracking(true);
         appScreen = 'game';
         console.log('[UI-CLIENT] Switching to game screen');
         render();
@@ -873,6 +1002,7 @@ function joinOnlineGame(name, code) {
         engine.state.board.forEach((space, i) => {
           if (space.owner) knownOwners.add(i);
         });
+        resetMonopolyTracking(true);
 
         // Register host-pattern callbacks: render + broadcast state
         engine.on(() => {
@@ -1273,12 +1403,15 @@ function renderBoard() {
     const isSelected = selectedSpaceInfo === i ? 'is-selected' : '';
     const isOwned = space.owner ? 'is-owned' : '';
     const hasPlayersClass = playersHere.length > 0 ? 'has-players' : '';
-    const spaceClasses = ['space', `space-${side}`, isCorner ? 'corner' : '', cornerClass, space.type, subtypeClass, unownedCityClass, isSelected, isOwned, hasPlayersClass]
+    const monopolyHighlight = getMonopolyHighlight(i);
+    const monopolyClass = monopolyHighlight ? 'space-monopoly-flash' : '';
+    const spaceClasses = ['space', `space-${side}`, isCorner ? 'corner' : '', cornerClass, space.type, subtypeClass, unownedCityClass, isSelected, isOwned, hasPlayersClass, monopolyClass]
       .filter(Boolean)
       .join(' ');
+    const monopolyStyle = monopolyHighlight ? `--monopoly-owner-color:${monopolyHighlight.color};` : '';
 
     html += `<div class="${spaceClasses}"
-                  style="grid-row:${pos.row + 1};grid-column:${pos.col + 1};"
+                  style="grid-row:${pos.row + 1};grid-column:${pos.col + 1};${monopolyStyle}"
                   data-space-id="${i}">`;
 
     // Flag badges indicate city grouping instead of alliance color bars
@@ -2175,6 +2308,7 @@ function resetToLobby(errorMessage = '') {
   lobbyIsHost = false;
   lobbyPlayers = [];
   lobbyError = errorMessage;
+  resetMonopolyTracking(false);
   setChatRoomScope(null);
   chatInputDraft = '';
   appScreen = 'lobby';
@@ -2620,6 +2754,7 @@ function handleLoadGame() {
     engine.on(() => render());
     engine.onAnimation((type, data) => handleAnimation(type, data));
     knownOwners = new Set();
+    resetMonopolyTracking(true);
     appScreen = 'game';
     render();
     return true;
