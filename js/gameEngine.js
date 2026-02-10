@@ -319,8 +319,8 @@ export class GameEngine {
     if (newPos < oldPos && spaces > 0) {
       const salary = this.calculateGoSalary(player);
       this.adjustMoney(player, salary);
-      player.influence += 3;
-      this.log(`${player.name} passes Global Summit! Collects $${salary} and 3 influence.`, 'success');
+      player.influence += 4;
+      this.log(`${player.name} passes Global Summit! Collects $${salary} and 4 influence.`, 'success');
     }
 
     player.position = newPos;
@@ -336,8 +336,8 @@ export class GameEngine {
     if (collectGo && targetPos < oldPos) {
       const salary = this.calculateGoSalary(player);
       this.adjustMoney(player, salary);
-      player.influence += 3;
-      this.log(`${player.name} passes Global Summit! Collects $${salary} and 3 influence.`, 'success');
+      player.influence += 4;
+      this.log(`${player.name} passes Global Summit! Collects $${salary} and 4 influence.`, 'success');
     }
     player.position = targetPos;
     this.emitAnimation('move', { playerId: player.id, from: oldPos, to: targetPos });
@@ -346,8 +346,8 @@ export class GameEngine {
 
   calculateGoSalary(player) {
     let salary = this.state.settings.goSalary;
-    // Influence bonus: +$2 per 100 influence
-    salary += Math.floor(player.influence / 100) * 2;
+    // Influence bonus: +$4 per 100 influence
+    salary += Math.floor(player.influence / 100) * 4;
     return salary;
   }
 
@@ -399,13 +399,13 @@ export class GameEngine {
     if (rent > 0 && owner && !owner.bankrupt) {
       this.adjustMoney(player, -rent);
       this.adjustMoney(owner, rent);
-      owner.influence += Math.floor(rent / 400);
+      owner.influence += Math.floor(rent / 350);
       owner.totalRentCollected += rent;
       player.totalRentPaid += rent;
 
       // BRICS alliance bonus
       if (this.hasCompleteAlliance(owner.id, 'BRICS')) {
-        owner.influence += Math.floor(rent / 50);
+        owner.influence += Math.floor(rent / 60);
       }
 
       this.log(`${player.name} pays $${rent} rent to ${owner.name} for ${space.name}.`, 'rent');
@@ -430,8 +430,8 @@ export class GameEngine {
       case 'freetrade':
         const bonus = 75;
         this.adjustMoney(player, bonus);
-        player.influence += 3;
-        this.log(`${player.name} enters the Free Trade Zone! Collects $${bonus} and 3 influence.`, 'success');
+        player.influence += 4;
+        this.log(`${player.name} enters the Free Trade Zone! Collects $${bonus} and 4 influence.`, 'success');
         this.state.phase = 'end-turn';
         break;
 
@@ -750,7 +750,7 @@ export class GameEngine {
     this.adjustMoney(player, -space.price);
     space.owner = playerId;
     player.properties.push(space.id);
-    player.influence += 2;
+    player.influence += 3;
 
     this.log(`${player.name} purchases ${space.name} for $${space.price}!`, 'purchase');
     this.emitAnimation('purchase', { playerId, spaceId: space.id });
@@ -816,7 +816,7 @@ export class GameEngine {
     if (space.owner !== playerId || space.mortgaged || space.developmentLevel > 0) return false;
 
     space.mortgaged = true;
-    const value = Math.floor(space.price * 0.35);
+    const value = Math.floor(space.price * 0.5);
     const player = this.getPlayerById(playerId);
     this.adjustMoney(player, value);
 
@@ -829,7 +829,7 @@ export class GameEngine {
     const space = this.getSpace(spaceId);
     if (space.owner !== playerId || !space.mortgaged) return false;
 
-    const cost = Math.floor(space.price * 0.45);
+    const cost = Math.floor(space.price * 0.55);
     const player = this.getPlayerById(playerId);
     if (player.money < cost) return false;
 
@@ -863,7 +863,7 @@ export class GameEngine {
     if (!['country', 'transport', 'infrastructure'].includes(space.type)) return 0;
     if (!space.owner) return 0;
 
-    const baseMultiplier = space.mortgaged ? 0.05 : 0.35;
+    const baseMultiplier = space.mortgaged ? 0.25 : 0.5;
     let payout = Math.floor(space.price * baseMultiplier);
 
     // Full liquidation returns a smaller fraction of development spend.
@@ -872,7 +872,7 @@ export class GameEngine {
       for (let level = 1; level <= space.developmentLevel; level++) {
         const tier = DEVELOPMENT_TIERS[level];
         const buildCost = Math.floor(space.price * tier.costMultiplier);
-        developmentRecovery += Math.floor(buildCost * 0.20);
+        developmentRecovery += Math.floor(buildCost * 0.50);
       }
       payout += developmentRecovery;
     }
@@ -1029,11 +1029,11 @@ export class GameEngine {
         break;
 
       case 'summit':
-        // Cost: 150 influence. All players gain $100
+        // Cost: 150 influence. All players gain $150
         if (player.influence < 150) return false;
         player.influence -= 150;
-        this.getActivePlayers().forEach(p => this.adjustMoney(p, 100));
-        this.log(`${player.name} calls a Summit Meeting! All players receive $100.`, 'influence');
+        this.getActivePlayers().forEach(p => this.adjustMoney(p, 150));
+        this.log(`${player.name} calls a Summit Meeting! All players receive $150.`, 'influence');
         break;
 
       case 'development_grant':
@@ -1112,39 +1112,33 @@ export class GameEngine {
 
       // Alliance bonuses per round
       this.getActivePlayers().forEach(player => {
-        const upkeep = this.calculateRoundUpkeep(player);
-        if (upkeep > 0) {
-          this.adjustMoney(player, -upkeep);
-          this.log(`${player.name} pays $${upkeep} in global maintenance costs.`, 'warning');
-        }
-
-        // Oil Nations: $100/turn if complete
+        // Oil Nations: $130/turn if complete
         if (this.hasCompleteAlliance(player.id, 'OIL_NATIONS')) {
-          this.adjustMoney(player, 100);
-          this.log(`${player.name} collects $100 from Oil Royalties!`, 'success');
+          this.adjustMoney(player, 130);
+          this.log(`${player.name} collects $130 from Oil Royalties!`, 'success');
         }
-        // Eastern Partnership: 10 influence/turn
+        // Eastern Partnership: 12 influence/turn
         if (this.hasCompleteAlliance(player.id, 'EASTERN')) {
-          player.influence += 10;
+          player.influence += 12;
         }
-        // African Rising: $80/turn
+        // African Rising: $100/turn
         if (this.hasCompleteAlliance(player.id, 'AFRICAN_RISING')) {
-          this.adjustMoney(player, 80);
-          this.log(`${player.name} collects $80 from Tourism Income!`, 'success');
+          this.adjustMoney(player, 100);
+          this.log(`${player.name} collects $100 from Tourism Income!`, 'success');
         }
         // Americas: free upgrade handled via flag
         if (this.hasCompleteAlliance(player.id, 'AMERICAS')) {
           this.state.pendingFreeUpgrade = player.id;
         }
-        // Pacific Islands: $60/turn tourism boost
+        // Pacific Islands: $80/turn tourism boost
         if (this.hasCompleteAlliance(player.id, 'PACIFIC_ISLANDS')) {
-          this.adjustMoney(player, 60);
-          this.log(`${player.name} collects $60 from Pacific Tourism Boost!`, 'success');
+          this.adjustMoney(player, 80);
+          this.log(`${player.name} collects $80 from Pacific Tourism Boost!`, 'success');
         }
-        // Nordic Council: +15 influence/turn
+        // Nordic Council: +20 influence/turn
         if (this.hasCompleteAlliance(player.id, 'NORDIC')) {
-          player.influence += 15;
-          this.log(`${player.name} gains 15 influence from Nordic Council!`, 'success');
+          player.influence += 20;
+          this.log(`${player.name} gains 20 influence from Nordic Council!`, 'success');
         }
       });
     }
@@ -1159,20 +1153,6 @@ export class GameEngine {
   }
 
   // ---- Money & Bankruptcy ----
-
-  calculateRoundUpkeep(player) {
-    const propertyCost = player.properties.length * 30;
-    let developmentCost = 0;
-
-    player.properties.forEach(pid => {
-      const space = this.getSpace(pid);
-      if (space?.type === 'country' && space.developmentLevel > 0) {
-        developmentCost += space.developmentLevel * 100;
-      }
-    });
-
-    return propertyCost + developmentCost;
-  }
 
   hasLiquidatableAssets(player) {
     return player.properties.some(pid => {

@@ -1298,12 +1298,12 @@ function renderPropertyPanel() {
           ` : ''}
           ${!space.mortgaged && space.developmentLevel === 0 ? `
             <button class="btn btn-xs btn-danger" data-mortgage="${pid}">
-              💳 Mortgage ($${Math.floor(space.price * 0.35)})
+              💳 Mortgage ($${Math.floor(space.price * 0.5)})
             </button>
           ` : ''}
           ${space.mortgaged ? `
             <button class="btn btn-xs btn-info" data-unmortgage="${pid}">
-              💳 Unmortgage ($${Math.floor(space.price * 0.45)})
+              💳 Unmortgage ($${Math.floor(space.price * 0.55)})
             </button>
           ` : ''}
         </div>

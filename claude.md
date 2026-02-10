@@ -139,7 +139,7 @@ Additional cities in expanded: Yerevan (EASTERN, also on classic), Riyadh (OIL_N
 ## Game Mechanics
 
 ### Victory Conditions
-1. **Influence Victory**: First to reach 2500 Influence Points
+1. **Influence Victory**: First to reach 3000 Influence Points
 2. **Last Standing**: Be the last solvent player
 
 ### Alliances & Their Bonuses
@@ -148,16 +148,16 @@ Must complete an alliance before developing (building) on any of its countries.
 
 | Alliance | Countries (Classic) | Countries (Expanded) | Completion Bonus |
 |----------|-----------|-----------|------------------|
-| EASTERN | Gyumri, Kapan, Yerevan | Same | +10 influence/turn |
-| AFRICAN_RISING | Alexandria, Giza, Cairo | Same | $80 tourism income/turn |
+| EASTERN | Gyumri, Kapan, Yerevan | Same | +12 influence/turn |
+| AFRICAN_RISING | Alexandria, Giza, Cairo | Same | $100 tourism income/turn |
 | SOUTH_ASIAN | Mumbai, Bengaluru, Delhi | Same | +$200 on all rent collected |
 | BRICS | Salvador, Rio, Sao Paulo | Same | Extra influence from rent collected |
 | EU | Paris, Toulouse, Lyon | Same | Double rent on developed properties |
 | ASIAN_TIGERS | Tel Aviv, Haifa, Jerusalem | Same | Tech Hub costs -50% |
-| OIL_NATIONS | Dubai, Riyadh, Abu Dhabi | Same | $100 oil royalties/turn |
+| OIL_NATIONS | Dubai, Riyadh, Abu Dhabi | Same | $130 oil royalties/turn |
 | AMERICAS | New York, San Francisco | + Chicago | Free development upgrade/round |
-| PACIFIC_ISLANDS | — | Auckland, Wellington, Queenstown | $60 tourism boost/turn |
-| NORDIC | — | Stockholm, Gothenburg, Malmo | +15 influence/turn |
+| PACIFIC_ISLANDS | — | Auckland, Wellington, Queenstown | $80 tourism boost/turn |
+| NORDIC | — | Stockholm, Gothenburg, Malmo | +20 influence/turn |
 
 **Note:** PACIFIC_ISLANDS and NORDIC alliances only appear on the expanded "World Domination" map. AMERICAS gains Chicago on the expanded map.
 
@@ -174,14 +174,14 @@ Countries produce: oil, tech, agriculture, tourism
 ### Special Mechanics
 - **Influence Actions**: Spend influence for Trade Embargo (200), Summit Meeting (150), Dev Grant (100)
 - **Card Decks**: Global News (shown to ALL players) and Diplomatic Cables (personal, shown only to drawer)
-- **Trade Sanctions**: Like jail - roll doubles, pay $1000, or use Diplomatic Immunity card
+- **Trade Sanctions**: Like jail - roll doubles, pay $700, or use Diplomatic Immunity card
 - **Trade System**: Propose trades to other players; recipients see glowing notification badge
 
 ### Key Constants (in gameData.js)
-- Starting Money: $8,000
-- GO Salary: $700 + bonuses
-- Sanctions Bail: $1,000
-- Influence to Win: 2,500
+- Starting Money: $10,000
+- GO Salary: $1,000 + bonuses
+- Sanctions Bail: $700
+- Influence to Win: 3,000
 
 ## UI Features
 
@@ -232,14 +232,14 @@ Player avatars are defined in `js/gameData.js` in the `PLAYER_AVATARS` array. Ea
 ## Recent Changes (Latest First)
 
 ### v1.7 - Economy Rebalance, Liquidation & Bankruptcy Pressure (Current)
-- **Harder economy defaults:** reduced baseline cash/income and raised pressure constants (`STARTING_MONEY` $8,000, `GO_SALARY` $700, `SANCTIONS_BAIL` $1,000, `INFLUENCE_TO_WIN` 2,500).
-- **Tax pressure increased on both maps:** Import Tariff is now $600 and Luxury Tax is $1,200 on classic and expanded boards.
+- **Softer economy tuning:** `STARTING_MONEY` $10,000, `GO_SALARY` $1,000, `SANCTIONS_BAIL` $700, `INFLUENCE_TO_WIN` 3,000 for better early-game buy capacity without runaway influence wins.
+- **Tax pressure reduced from the prior rebalance:** Import Tariff is now $400 and Luxury Tax is $900 on classic and expanded boards.
 - **Influence pacing reduced:** lower influence from passing GO, property purchases, development, rent collection, and alliance passive gains; this makes influence victories much less common.
 - **Debt is now real:** payments can drive money below zero; players must liquidate assets to recover, and cannot end their turn while insolvent.
-- **New round upkeep system:** each round, players pay global maintenance based on property count and development level, creating ongoing economic pressure.
+- **No round upkeep costs:** maintenance drain was removed after playtests showed early-game purchasing became too constrained.
 - **New property liquidation action:** players can now fully liquidate owned properties from Property Management for immediate cash; the sold space becomes unowned/unoccupied.
-- **Liquidation valuation model:** direct sale recovers a reduced share of base property value plus partial development recovery; mortgage/unmortgage values were tightened.
-- **Summit Meeting toned down:** influence action now grants $100 to each active player instead of $500.
+- **Monopoly-like liquidation/mortgage values:** mortgage is 50%, unmortgage is 55%, and direct liquidation is more forgiving to keep players active.
+- **Summit Meeting toned down:** influence action now grants $150 to each active player instead of $500.
 
 ### v1.6.1 - Gameplay Sync, Action Validation & Animation Timing
 - **Dice desync fix (display vs movement):** dice UI is now synchronized to authoritative roll values (`state.lastDice`) even when movement animation defers full render. Added direct dice-face/total sync helpers so the displayed roll always matches actual movement.
@@ -426,7 +426,7 @@ Player avatars are defined in `js/gameData.js` in the `PLAYER_AVATARS` array. Ea
   - `proposeTrade()` / `acceptTrade()` / `rejectTrade()` / `cancelTrade()` - Trading system with validation (recipient-only accept/reject, ownership checks at accept-time, sender-only cancel)
   - `useInfluenceAction()` - Influence powers
   - `checkWinCondition()` - Victory detection
-  - `calculateRoundUpkeep()` / `hasLiquidatableAssets()` - Economic pressure + insolvency checks
+  - `hasLiquidatableAssets()` - Insolvency checks for debt/liquidation flow
   - `getPlayerById()` - Lookup player by ID
   - Alliance bonuses: OIL_NATIONS, EASTERN, AFRICAN_RISING, AMERICAS, PACIFIC_ISLANDS, NORDIC
 
@@ -598,4 +598,6 @@ window.debug.listAlliances()
 - **Roll Dice / End Turn**: Centered below dice on the board
 - **Save button**: Saves to localStorage (includes map metadata)
 - **Load button**: Appears if save exists (backwards compatible with pre-map saves)
+
+
 
