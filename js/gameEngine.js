@@ -26,13 +26,20 @@ function generateId() {
   return Math.random().toString(36).substr(2, 9);
 }
 
+function normalizeIndex(index, size) {
+  if (!Number.isInteger(index) || size <= 0) return -1;
+  return ((index % size) + size) % size;
+}
+
 // ---- Player Factory ----
-function createPlayer(name, index) {
+function createPlayer(name, index, avatarIndex = index) {
+  const colorIndex = normalizeIndex(index, PLAYER_COLORS.length);
+  const normalizedAvatarIndex = normalizeIndex(avatarIndex, PLAYER_AVATARS.length);
   return {
     id: generateId(),
     name,
-    color: PLAYER_COLORS[index],
-    avatar: PLAYER_AVATARS[index],
+    color: colorIndex >= 0 ? PLAYER_COLORS[colorIndex] : '#FFFFFF',
+    avatar: normalizedAvatarIndex >= 0 ? PLAYER_AVATARS[normalizedAvatarIndex] : null,
     money: STARTING_MONEY,
     position: 0,
     properties: [],       // space IDs
@@ -51,8 +58,11 @@ function createPlayer(name, index) {
 }
 
 // ---- Game State Factory ----
-export function createGameState(playerNames, mapId = 'classic') {
-  const players = playerNames.map((name, i) => createPlayer(name, i));
+export function createGameState(playerNames, mapId = 'classic', avatarIndices = []) {
+  const players = playerNames.map((name, i) => {
+    const requestedAvatarIndex = Number.isInteger(avatarIndices[i]) ? avatarIndices[i] : i;
+    return createPlayer(name, i, requestedAvatarIndex);
+  });
   const globalNewsDeck = shuffle([...GLOBAL_NEWS_CARDS]);
   const diplomaticDeck = shuffle([...DIPLOMATIC_CABLE_CARDS]);
   const mapConfig = MAPS[mapId] || MAPS.classic;

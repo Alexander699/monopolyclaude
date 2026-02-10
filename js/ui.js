@@ -81,6 +81,7 @@ let showCardModal = false;
 let currentCardDisplay = null;
 let appScreen = 'lobby'; // lobby, game, gameover
 let lobbyPlayers = [];
+let lobbyAvatarSelections = [];
 let lobbyRoomCode = '';
 let lobbyPlayerName = '';
 let lobbyIsHost = false;
@@ -90,6 +91,66 @@ let selectedSpaceInfo = null; // Space ID for info modal (null = hidden)
 let selectedMapId = 'classic'; // Map selection (classic or expanded)
 let knownOwners = new Set(); // Track space IDs with known ownership (prevents animation replay)
 let prevPlayerSnapshots = {}; // Track previous money/influence/property counts for change animations
+
+function normalizeLobbyAvatarSelections(count) {
+  const targetCount = Math.max(0, Number.isInteger(count) ? count : 0);
+  const totalAvatars = PLAYER_AVATARS.length;
+
+  if (totalAvatars <= 0) {
+    lobbyAvatarSelections = Array(targetCount).fill(-1);
+    return;
+  }
+
+  const nextSelections = [];
+  const used = new Set();
+
+  for (let i = 0; i < targetCount; i++) {
+    let avatarIndex = lobbyAvatarSelections[i];
+    if (!Number.isInteger(avatarIndex) || avatarIndex < 0 || avatarIndex >= totalAvatars || used.has(avatarIndex)) {
+      avatarIndex = null;
+      for (let attempt = 0; attempt < totalAvatars; attempt++) {
+        const candidate = (i + attempt) % totalAvatars;
+        if (!used.has(candidate)) {
+          avatarIndex = candidate;
+          break;
+        }
+      }
+      if (!Number.isInteger(avatarIndex)) {
+        avatarIndex = i % totalAvatars;
+      }
+    }
+    nextSelections.push(avatarIndex);
+    used.add(avatarIndex);
+  }
+
+  lobbyAvatarSelections = nextSelections;
+}
+
+function rotateLobbyAvatar(playerIndex, direction) {
+  const totalAvatars = PLAYER_AVATARS.length;
+  if (totalAvatars <= 0) return;
+  if (!Number.isInteger(playerIndex) || playerIndex < 0 || playerIndex >= lobbyAvatarSelections.length) return;
+
+  const step = direction < 0 ? -1 : 1;
+  const current = Number.isInteger(lobbyAvatarSelections[playerIndex])
+    ? lobbyAvatarSelections[playerIndex]
+    : (playerIndex % totalAvatars);
+
+  // Keep other players' avatars locked: only cycle to avatars that are not in use.
+  const usedByOthers = new Set(
+    lobbyAvatarSelections
+      .filter((avatarIdx, idx) => idx !== playerIndex && Number.isInteger(avatarIdx))
+  );
+
+  let candidate = current;
+  for (let attempt = 0; attempt < totalAvatars; attempt++) {
+    candidate = (candidate + step + totalAvatars) % totalAvatars;
+    if (!usedByOthers.has(candidate)) {
+      lobbyAvatarSelections[playerIndex] = candidate;
+      return;
+    }
+  }
+}
 
 // ---- Board Layout Helpers ----
 // Board is NxN grid (11x11 for classic, 13x13 for expanded). Spaces go clockwise:
@@ -145,6 +206,7 @@ export function initApp() {
   if (lobbyPlayers.length === 0) {
     lobbyPlayers = ['', ''];
   }
+  normalizeLobbyAvatarSelections(lobbyPlayers.length || 2);
   render();
 
   // Handle window resize
@@ -319,6 +381,10 @@ function renderRoomCodeDisplay() {
 function renderLobby() {
   // Debug: log lobby state
   console.log('[RENDER] renderLobby called - lobbyIsHost:', lobbyIsHost, 'lobbyRoomCode:', lobbyRoomCode);
+  const localPlayers = lobbyPlayers.length === 0 ? Array(2).fill('') : lobbyPlayers;
+  if (!lobbyRoomCode) {
+    normalizeLobbyAvatarSelections(localPlayers.length);
+  }
 
   return `
     <div class="lobby-screen">
@@ -351,14 +417,22 @@ function renderLobby() {
               </div>
 
               <div class="player-names-list">
-                ${(lobbyPlayers.length === 0 ? Array(2).fill('') : lobbyPlayers).map((name, i) => `
+                ${localPlayers.map((name, i) => {
+                  const avatarIndex = lobbyAvatarSelections[i];
+                  const avatar = avatarIndex >= 0 ? PLAYER_AVATARS[avatarIndex] : null;
+                  return `
                   <div class="player-name-row">
                     <span class="player-color-dot" style="background:${PLAYER_COLORS[i]}"></span>
-                    <span class="player-avatar-pick">${getAvatarHtml(PLAYER_AVATARS[i], 28)}</span>
+                    <div class="player-avatar-picker">
+                      <button type="button" class="avatar-cycle-btn" data-avatar-index="${i}" data-avatar-dir="-1" aria-label="Previous avatar">&lt;</button>
+                      <span class="player-avatar-pick">${getAvatarHtml(avatar, 28)}</span>
+                      <button type="button" class="avatar-cycle-btn" data-avatar-index="${i}" data-avatar-dir="1" aria-label="Next avatar">&gt;</button>
+                    </div>
                     <input type="text" class="player-name-input" data-index="${i}"
                            value="${name}" placeholder="Player ${i + 1}" maxlength="16" />
                   </div>
-                `).join('')}
+                `;
+                }).join('')}
               </div>
 
               <button class="btn btn-primary btn-lg start-local-btn">
@@ -465,6 +539,18 @@ function attachLobbyEvents() {
     btn.addEventListener('click', () => {
       const count = parseInt(btn.dataset.count);
       lobbyPlayers = Array(count).fill('').map((_, i) => lobbyPlayers[i] || '');
+      normalizeLobbyAvatarSelections(count);
+      render();
+    });
+  });
+
+  // Avatar picker controls (local game)
+  document.querySelectorAll('.avatar-cycle-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = parseInt(btn.dataset.avatarIndex, 10);
+      const dir = parseInt(btn.dataset.avatarDir, 10);
+      if (Number.isNaN(idx) || Number.isNaN(dir)) return;
+      rotateLobbyAvatar(idx, dir);
       render();
     });
   });
@@ -492,8 +578,10 @@ function attachLobbyEvents() {
     startBtn.addEventListener('click', () => {
       if (lobbyPlayers.length === 0) lobbyPlayers = ['', ''];
       const names = lobbyPlayers.map((n, i) => n.trim() || `Player ${i + 1}`);
+      normalizeLobbyAvatarSelections(names.length);
+      const avatarIndices = lobbyAvatarSelections.slice(0, names.length);
       if (names.length < 2) return;
-      startLocalGame(names);
+      startLocalGame(names, avatarIndices);
     });
   }
 
@@ -539,13 +627,14 @@ function attachLobbyEvents() {
   if (lobbyPlayers.length === 0) {
     lobbyPlayers = ['', ''];
   }
+  normalizeLobbyAvatarSelections(lobbyPlayers.length || 2);
 }
 
-function startLocalGame(names) {
+function startLocalGame(names, avatarIndices = []) {
   sound.init();
   lobbyError = '';
   setChatRoomScope(null);
-  const state = createGameState(names, selectedMapId);
+  const state = createGameState(names, selectedMapId, avatarIndices);
   engine = new GameEngine(state);
   localPlayerId = null; // Local mode = all players on same device
 
