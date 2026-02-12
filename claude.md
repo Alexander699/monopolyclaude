@@ -42,62 +42,51 @@ python -m http.server 8080
 
 ## Multiplayer Architecture
 
-### Socket.IO Relay Model
-The server does **zero game logic** — it's a pure message relay.
+### Server-Authoritative Model
+The server runs ALL game logic. No player is special — all clients are equal.
 ```
-Client Action → Socket.IO Server → Relays to Host
-Host processes in GameEngine → Broadcasts state → Server relays to all Clients
+Client Action → Socket.IO Server (runs GameEngine) → Broadcasts state + animations to ALL Clients
 ```
 
-### Host-as-Authority
-- **Host** runs the `GameEngine`, processes ALL actions, broadcasts state changes
-- **Clients** send actions via `network.sendAction()` → server relays to host
-- **Host** receives actions via `game-action` event → `handleRemoteAction()` dispatches to engine
-- Engine emits → host callback calls `network.broadcastState()` → server relays to all clients
+### How It Works
+- **Server** creates and runs the `GameEngine` when the room creator starts the game
+- **All clients** send actions via `network.sendAction()` → server processes them via `GameEngine`
+- **Server** broadcasts stripped state (no card decks) + animation events to all clients
+- **Room creator** can start the game and kick players, but has no game-logic authority
+- **Any player can disconnect** without breaking the game — server skips their turns automatically
 
 ### Socket.IO Events
 | Event | Direction | Purpose |
 |-------|-----------|---------|
-| `create-room` | Client→Server | Host creates a room (includes persistent `clientId`) |
+| `create-room` | Client→Server | Room creator creates a room (includes persistent `clientId`) |
 | `room-created` | Server→Client | Returns room code |
 | `join-room` | Client→Server | Client joins/rejoins with code+name+`clientId` |
 | `joined` | Server→Client | Confirms join/rejoin with player list |
 | `player-joined/left` | Server→All | Player list updates |
-| `start-game` | Host→Server→Clients | Sends initial game state to each client |
-| `game-action` | Client→Server→Host | Client action relayed to host |
-| `state-update` | Host→Server→Clients | Host broadcasts state changes |
-| `animation` | Host→Server→Clients | Host relays movement animation events so clients animate tokens |
-| `global-news` | Host→Server→Clients | Global News card shown to all |
+| `start-game` | Creator→Server | Creator sends `{ mapId }`, server creates GameEngine and sends state to all |
+| `game-start` | Server→All | Server sends initial stripped state + player assignment to each client |
+| `game-action` | Client→Server | Client sends action, server processes it via GameEngine |
+| `state-update` | Server→All | Server broadcasts stripped state after each engine state change |
+| `animation` | Server→All/One | Server broadcasts animations (Diplomatic Cables only to drawer) |
+| `global-news` | Server→All | Global News card shown to all players |
 | `chat` | Any→Server→Others | Chat messages |
-| `player-connection` | Server→Host | Notifies host when a client disconnects/reconnects |
-| `kick-player` | Host→Server | Host removes a player by `playerId` |
-| `player-kicked` | Server→Host | Confirms player kick to host |
+| `kick-player` | Creator→Server | Room creator removes a player by `playerId` |
 | `kicked` | Server→Client | Notifies kicked client and terminates session |
 | `error-msg` | Server→Client | Error notifications |
-| `host-state-backup` | Host→Server | Full state backup (with card decks) stored on server for host migration; never relayed to clients |
-| `promote-to-host` | Server→Client | Promotes a client to host role with full state backup during host migration |
-| `host-migrated` | Server→Clients | Notifies non-promoted clients that a new host has been selected |
 
-### Host Migration
-When the host disconnects during an active game, the server promotes another connected client to become the new host instead of closing the room:
-
-1. Server marks old host as disconnected
-2. Server finds the best candidate (first connected, non-kicked member by `playerIndex`)
-3. Server sends `promote-to-host` to the new host with full game state (including card decks)
-4. Server sends `host-migrated` to all other clients
-5. New host reconstructs `GameEngine` from full state, registers host callbacks, and resumes
-6. Old host can rejoin later via room code as a regular client (or reclaim host if no migration happened)
-
-**Full state backup**: The host sends unstripped state (with card decks) to the server via `host-state-backup` after every state change. This backup is stored on the server but never relayed to clients, preserving card deck privacy while enabling migration.
-
-**Edge cases**: If no connected clients exist when the host disconnects, the room stays alive for 60 seconds awaiting reconnect. If the old host reconnects before any migration, they reclaim the host role. Double migration works (if the new host also disconnects, the next candidate is promoted).
+### Disconnect Handling
+- When a player disconnects, the server marks them as disconnected in the engine state
+- If it was their turn, the server immediately skips it
+- If it becomes their turn later, the server auto-skips
+- Any player can reconnect via the room code and receive the current game state
+- The game continues as long as the server is running — no player is a single point of failure
 
 ### Key Patterns in ui.js
-- `isOnlineClient()` — returns true when playing online as non-host
-- `handleRemoteAction(data)` — host dispatches client actions to engine and rejects turn-based actions from non-active senders
-- All action handlers check `isOnlineClient()` → call `network.sendAction()` instead of engine directly
-- Card decks stripped from network payloads (`stripCardDecks()`) to reduce message size
-- Start Game button double-checks both `lobbyIsHost` and `network.isHost`
+- `isOnlineGame()` — returns true when playing online (all players send actions via network)
+- All action handlers check `isOnlineGame()` → call `network.sendAction()` instead of engine directly
+- Server strips card decks before sending state to clients (anti-cheat)
+- `handleOnlineEvent()` — unified event handler for both room creator and joining clients
+- Start Game button checks both `lobbyIsHost` and `network.isHost` (room creator only)
 
 ## Map System
 
@@ -106,7 +95,7 @@ Players choose a map in the lobby before starting the game. The map selection UI
 
 - **State variable**: `selectedMapId` in ui.js (defaults to `'classic'`)
 - **Map registry**: `MAPS` object in gameData.js defines all available maps
-- **Host selects map**: In online mode, the host's map selection is used when `network.startGame(selectedMapId)` is called
+- **Room creator selects map**: In online mode, the creator's map selection is sent when `network.startGame(selectedMapId)` is called
 - **Map metadata in game state**: `state.mapId`, `state.totalSpaces`, `state.corners`, `state.gridSize` are stored in the game state and used by all dynamic logic
 
 ### Map Registry (gameData.js → `MAPS`)
@@ -248,7 +237,20 @@ Player avatars are defined in `js/gameData.js` in the `PLAYER_AVATARS` array. Ea
 
 ## Recent Changes (Latest First)
 
-### v1.8 - Host Migration (Current)
+### v1.9 - Server-Authoritative Architecture (Current)
+- **Server runs all game logic:** the Node.js server now creates and runs the `GameEngine` directly — no player's browser runs game logic in online mode.
+- **All players are equal clients:** no host/client distinction during gameplay. Any player can disconnect without breaking the game.
+- **Server processes all actions:** `processGameAction()` handles all 17 action types (roll-dice, buy-property, trades, etc.) with the same turn-validation as the old host had.
+- **Server broadcasts state + animations:** engine callbacks `broadcastStateToAll()` and `broadcastAnimationToAll()` send stripped state (no card decks) and animation events to all connected clients.
+- **Automatic disconnected player handling:** when a player disconnects during their turn, the server skips it. Future turns for disconnected players are auto-skipped.
+- **Simplified reconnection:** reconnecting players receive the current game state via `game-start` and resume seamlessly.
+- **Removed host migration:** no longer needed since the server holds the engine. Removed `promote-to-host`, `host-migrated`, `host-reconnect-waiting`, `host-state-backup` events.
+- **Server converted to ESM:** `server/package.json` has `"type": "module"` so the server can import `gameEngine.js` and `gameData.js` directly.
+- **Simplified network.js:** removed `broadcastState()`, `broadcastGlobalNews()`, `broadcastAnimation()`, `stripCardDecks()`, `registerHostListeners()`. All players use `sendAction()`.
+- **Simplified ui.js:** replaced `isOnlineClient()` with `isOnlineGame()`, removed `handleRemoteAction()` (~90 lines), removed host migration code (~90 lines), removed `handleHostPlayerConnection()`/`handleHostPlayerKicked()`. Unified `handleOnlineEvent()` for both room creator and joining clients.
+- **Room creator retains lobby permissions:** can start the game and kick players, but is otherwise equal to other players during gameplay.
+
+### v1.8 - Host Migration
 - **Host migration:** when the host disconnects during an active game, the server promotes the first connected client to become the new host instead of closing the room. The new host reconstructs the `GameEngine` from a full state backup and resumes the game seamlessly.
 - **Full state backup:** host sends unstripped state (with card decks) to the server via `host-state-backup` after every state change. Stored on server only, never relayed to clients.
 - **New events:** `host-state-backup` (host→server), `promote-to-host` (server→new host), `host-migrated` (server→other clients).
@@ -479,9 +481,9 @@ Player avatars are defined in `js/gameData.js` in the `PLAYER_AVATARS` array. Ea
 - `animatePlayerMovement()` - Smooth floating token sliding between cells (wraps via `% state.totalSpaces`) with fixed per-step timing
 - `queuePostMoveSound()` / `flushPostMoveSounds()` - Defers landing-related SFX (e.g., rent payment) until movement animation completes
 - `getFlagHtml()` - Converts flag emoji to image for cross-platform display; now also falls back to `flagEmojiToCode()` for new countries not present in the static map
-- `hostOnlineGame()` / `joinOnlineGame()` - Network setup with callbacks
-- `handleHostPlayerConnection()` - Host-side disconnect/reconnect state handling
-- `handleKickPlayer()` / `handleHostPlayerKicked()` - Host moderation actions and post-kick game-state handling
+- `hostOnlineGame()` / `joinOnlineGame()` - Network setup, delegates to `handleOnlineEvent()`
+- `handleOnlineEvent()` - Unified event handler for both room creator and joining clients
+- `handleKickPlayer()` - Room creator moderation (sends kick to server)
 - `handleLoadGame()` - Loads saved game with backwards compatibility for pre-map saves
 - **State variables**: `selectedMapId` (lobby map choice), `selectedSpaceInfo` (space info modal), `prevPlayerSnapshots` (previous money/influence/property counts for change animations)
 - Debug tools at bottom (window.enableDebug(), window.debug.*)
@@ -490,27 +492,26 @@ Player avatars are defined in `js/gameData.js` in the `PLAYER_AVATARS` array. Ea
 - `NetworkManager` class with Socket.IO internals
 - `SERVER_URL` auto-detects localhost vs production
 - Persistent `clientId` in localStorage (`gew_client_id`) for session rejoin
-- `host(name, callback)` - Creates room via server
+- `host(name, callback)` - Creates room via server (sets `isHost = true` for lobby permissions)
 - `join(name, code, callback)` - Joins/rejoins room via server
-- `startGame(mapId)` - Host creates state with selected map and sends per-player assignments including `clientId`
-- `broadcastState(state)` - Host sends state to all clients (strips card decks)
-- `broadcastGlobalNews(card)` - Host sends Global News card to all clients
-- `broadcastAnimation(type, data)` - Host relays movement animations to clients
-- `sendAction(action)` - Client sends action to host via server
+- `startGame(mapId)` - Sends `{ mapId }` to server; server creates the GameEngine
+- `sendAction(action)` - All clients send actions to server for processing
 - `sendChat(msg)` - Send chat message
-- `kickPlayer(playerId)` - Host moderation request to remove player
-- `stripCardDecks(state)` - Removes card deck arrays to reduce payload size
+- `kickPlayer(playerId)` - Room creator moderation request
 - `destroy()` - Disconnect and cleanup
 
-### server/index.js (Socket.IO Relay Server)
-- Express + Socket.IO, listens on PORT env var or 3000
+### server/index.js (Server-Authoritative Game Server)
+- Express + Socket.IO (ESM), listens on PORT env var or 3000
+- Imports `GameEngine` and `createGameState` from `../js/gameEngine.js`
 - CORS: allows alexander699.github.io + localhost
 - Room management: create/join with 5-char codes, max 8 players
-- Session seats keyed by persistent `clientId` (not socket ID) for non-host rejoin support
-- Stores latest stripped game state + `playerAssignments` so reconnecting clients can be re-synced
-- Message relay: game-action → host, state-update/global-news/animation → clients
-- Moderation relay: `kick-player`, `player-kicked`, `kicked`, `player-connection`
-- Disconnect handling: host leaves = room closes, client disconnect in active game = marked offline (rejoinable unless kicked)
+- Session seats keyed by persistent `clientId` (not socket ID) for rejoin support
+- **Server creates GameEngine** on `start-game` and stores per room
+- **Server processes all game actions** via `processGameAction()` (17 action types)
+- **Server broadcasts** stripped state (no card decks) + animations to all clients via engine callbacks
+- **Disconnect handling**: marks player disconnected, skips their turn, auto-skips future turns
+- **Kick handling**: room creator can kick; server declares bankruptcy and advances turn
+- **Reconnect**: rejoining player gets current stripped state via `game-start` event
 - Room cleanup: deletes rooms older than 2 hours every 5 minutes
 - Health check: `GET /` returns `{ status: 'ok', rooms: count }`
 
@@ -521,17 +522,16 @@ Player avatars are defined in `js/gameData.js` in the `PLAYER_AVATARS` array. Ea
 
 ## Architecture Notes
 
-### State Flow (Local / Host)
+### State Flow (Local Game)
 ```
 User Action → UI Handler → GameEngine method → State Update → emit() → render()
-                                                            → broadcastState() (if host)
 ```
 
-### State Flow (Online Client)
+### State Flow (Online Game)
 ```
-User Action → UI Handler → network.sendAction() → Server → Host
-Host: handleRemoteAction() → GameEngine → emit() → render() + broadcastState()
-Server relays state-update → Client: Object.assign(engine.state, ...) → render()
+User Action → UI Handler → network.sendAction() → Server
+Server: processGameAction() → GameEngine → emit() → broadcastStateToAll() + broadcastAnimationToAll()
+Server sends state-update → Client: Object.assign(engine.state, ...) → render()
 ```
 
 ### Board Coordinate System

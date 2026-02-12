@@ -2,8 +2,8 @@
 // GLOBAL ECONOMIC WARS - Network Manager (Socket.IO)
 // ============================================================
 
-// Socket.IO relay server - host is still the game authority,
-// server relays actions/state between host and clients.
+// Server-authoritative model: the server runs the GameEngine.
+// All clients are equal — they send actions and receive state updates.
 
 const SERVER_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? `http://${window.location.hostname}:3000`
@@ -18,15 +18,14 @@ function createClientId() {
 export class NetworkManager {
   constructor() {
     this.socket = null;
-    this.isHost = false;
+    this.isHost = false;       // True = room creator (can start game + kick). NOT a game-logic host.
     this.roomCode = '';
     this.playerName = '';
     this.callback = null;
-    this.players = []; // Array of {name, clientId, playerId, connected}
+    this.players = [];         // Array of {name, clientId, playerId, connected}
     this.localPlayerId = null;
     this.clientId = this.getOrCreateClientId();
     this.wasKicked = false;
-    this.hostListenersRegistered = false;
   }
 
   getOrCreateClientId() {
@@ -73,19 +72,9 @@ export class NetworkManager {
   }
 
   log(msg, type = 'info') {
-    const prefix = this.isHost ? '[HOST]' : '[CLIENT]';
+    const prefix = this.isHost ? '[CREATOR]' : '[CLIENT]';
     const style = type === 'error' ? 'color: red' : type === 'warn' ? 'color: orange' : 'color: green';
     console.log(`%c${prefix} ${msg}`, style);
-  }
-
-  // Strip large card decks from state to reduce message size
-  stripCardDecks(state) {
-    const stripped = JSON.parse(JSON.stringify(state));
-    stripped.globalNewsDeck = [];
-    stripped.diplomaticDeck = [];
-    stripped.globalNewsDiscard = [];
-    stripped.diplomaticDiscard = [];
-    return stripped;
   }
 
   connectSocket() {
@@ -110,6 +99,83 @@ export class NetworkManager {
       if (this.callback) {
         this.callback('error', data);
       }
+    });
+  }
+
+  // Register all gameplay event listeners (shared by both host and join)
+  _registerGameplayListeners(callback) {
+    this.socket.on('game-start', (data) => {
+      this.log('=== GAME START RECEIVED ===');
+      this.log(`Local player ID: ${data.localId}`);
+      this.log(`Player index: ${data.playerIndex}`);
+      this.localPlayerId = data.localId;
+      callback('game-start', data);
+    });
+
+    this.socket.on('state-update', (data) => {
+      callback('state-update', data);
+    });
+
+    this.socket.on('global-news', (data) => {
+      callback('global-news', data);
+    });
+
+    this.socket.on('animation', (data) => {
+      callback('animation', data);
+    });
+
+    this.socket.on('chat', (msg) => {
+      callback('chat', msg);
+    });
+
+    this.socket.on('kicked', (data) => {
+      this.wasKicked = true;
+      callback('kicked', data);
+    });
+
+    this.socket.on('disconnect', () => {
+      this.log('Disconnected from server', 'warn');
+      if (!this.wasKicked) {
+        callback('error', { message: 'Lost connection to server. Trying to reconnect...' });
+      }
+    });
+  }
+
+  // Register lobby event listeners (shared by both host and join)
+  _registerLobbyListeners(callback) {
+    this.socket.on('joined', (data) => {
+      this.log(`Joined room with players: ${(data.players || []).join(', ')}`);
+      if (data.clientId) this.persistClientId(data.clientId);
+      if (typeof data.isHost === 'boolean') this.isHost = data.isHost;
+      this.setPlayers(data.players, data.participants);
+      callback('joined', {
+        players: this.players.map(p => p.name),
+        participants: this.players,
+        rejoined: !!data.rejoined
+      });
+    });
+
+    this.socket.on('player-joined', ({ players, participants, newPlayer, reconnected }) => {
+      this.log(`Player joined: ${newPlayer || 'unknown'}`);
+      this.setPlayers(players, participants);
+      callback('player-joined', {
+        players: this.players.map(p => p.name),
+        participants: this.players,
+        newPlayer,
+        reconnected: !!reconnected
+      });
+    });
+
+    this.socket.on('player-left', ({ players, participants, leftPlayer, disconnected, kicked }) => {
+      this.log(`Player left: ${leftPlayer || 'unknown'}`);
+      this.setPlayers(players, participants);
+      callback('player-left', {
+        players: this.players.map(p => p.name),
+        participants: this.players,
+        leftPlayer,
+        disconnected: !!disconnected,
+        kicked: !!kicked
+      });
     });
   }
 
@@ -148,65 +214,8 @@ export class NetworkManager {
       });
     });
 
-    this.socket.on('joined', (data) => {
-      this.log(`Rejoined room with players: ${(data.players || []).join(', ')}`);
-      if (data.clientId) this.persistClientId(data.clientId);
-      if (typeof data.isHost === 'boolean') this.isHost = data.isHost;
-      this.setPlayers(data.players, data.participants);
-      callback('joined', {
-        players: this.players.map(p => p.name),
-        participants: this.players,
-        rejoined: !!data.rejoined
-      });
-    });
-
-    this.socket.on('player-joined', ({ players, participants, newPlayer, reconnected }) => {
-      this.log(`Player joined: ${newPlayer || 'unknown'} (${players?.length || 0} total)`);
-      this.setPlayers(players, participants);
-      callback('player-joined', {
-        players: this.players.map(p => p.name),
-        participants: this.players,
-        newPlayer,
-        reconnected: !!reconnected
-      });
-    });
-
-    this.socket.on('player-left', ({ players, participants, leftPlayer, disconnected, kicked }) => {
-      this.log(`Player left: ${leftPlayer || 'unknown'}`);
-      this.setPlayers(players, participants);
-      callback('player-left', {
-        players: this.players.map(p => p.name),
-        participants: this.players,
-        leftPlayer,
-        disconnected: !!disconnected,
-        kicked: !!kicked
-      });
-    });
-
-    this.socket.on('player-connection', (data) => {
-      callback('player-connection', data);
-    });
-
-    this.socket.on('player-kicked', (data) => {
-      callback('player-kicked', data);
-    });
-
-    this.socket.on('game-action', (data) => {
-      this.log(`Received action: ${data.actionType}`);
-      callback('action', data);
-    });
-
-    this.socket.on('chat', (msg) => {
-      callback('chat', msg);
-    });
-
-    this.socket.on('animation', (data) => {
-      callback('animation', data);
-    });
-
-    this.socket.on('disconnect', () => {
-      this.log('Disconnected from server', 'warn');
-    });
+    this._registerLobbyListeners(callback);
+    this._registerGameplayListeners(callback);
   }
 
   join(name, code, callback) {
@@ -227,107 +236,15 @@ export class NetworkManager {
       });
     });
 
-    this.socket.on('joined', (data) => {
-      this.log(`Joined room with players: ${(data.players || []).join(', ')}`);
-      if (data.clientId) this.persistClientId(data.clientId);
-      if (typeof data.isHost === 'boolean') this.isHost = data.isHost;
-      this.setPlayers(data.players, data.participants);
-      callback('joined', {
-        players: this.players.map(p => p.name),
-        participants: this.players,
-        rejoined: !!data.rejoined
-      });
-    });
-
-    this.socket.on('player-joined', ({ players, participants, newPlayer, reconnected }) => {
-      this.log(`Player joined: ${newPlayer || 'unknown'}`);
-      this.setPlayers(players, participants);
-      callback('player-joined', {
-        players: this.players.map(p => p.name),
-        participants: this.players,
-        newPlayer,
-        reconnected: !!reconnected
-      });
-    });
-
-    this.socket.on('player-left', ({ players, participants, leftPlayer, disconnected, kicked }) => {
-      this.log(`Player left: ${leftPlayer || 'unknown'}`);
-      this.setPlayers(players, participants);
-      callback('player-left', {
-        players: this.players.map(p => p.name),
-        participants: this.players,
-        leftPlayer,
-        disconnected: !!disconnected,
-        kicked: !!kicked
-      });
-    });
-
-    this.socket.on('game-start', (data) => {
-      this.log('=== GAME START RECEIVED ===');
-      this.log(`Local player ID: ${data.localId}`);
-      this.log(`Player index: ${data.playerIndex}`);
-      this.log(`State has ${data.state?.players?.length || 0} players`);
-      this.localPlayerId = data.localId;
-      callback('game-start', data);
-    });
-
-    this.socket.on('state-update', (data) => {
-      callback('state-update', data);
-    });
-
-    this.socket.on('global-news', (data) => {
-      callback('global-news', data);
-    });
-
-    this.socket.on('chat', (msg) => {
-      callback('chat', msg);
-    });
-
-    this.socket.on('animation', (data) => {
-      callback('animation', data);
-    });
-
-    this.socket.on('promote-to-host', (data) => {
-      this.log('=== PROMOTED TO HOST ===');
-      this.isHost = true;
-      if (data.participants) {
-        this.players = data.participants.map(p => ({
-          name: p.name,
-          clientId: p.clientId,
-          playerId: p.playerId,
-          connected: p.connected
-        }));
-      }
-      callback('promote-to-host', data);
-    });
-
-    this.socket.on('host-migrated', (data) => {
-      this.log(`Host migrated: new host is "${data.newHostName}"`);
-      callback('host-migrated', data);
-    });
-
-    this.socket.on('host-reconnect-waiting', (data) => {
-      callback('host-reconnect-waiting', data);
-    });
-
-    this.socket.on('kicked', (data) => {
-      this.wasKicked = true;
-      callback('kicked', data);
-    });
-
-    this.socket.on('disconnect', () => {
-      this.log('Disconnected from server', 'warn');
-      if (!this.wasKicked && !this.isHost) {
-        callback('error', { message: 'Lost connection to server. The game session has ended.' });
-      }
-    });
+    this._registerLobbyListeners(callback);
+    this._registerGameplayListeners(callback);
   }
 
   startGame(mapId = 'classic') {
     this.log('=== startGame() called ===');
 
     if (!this.isHost) {
-      this.log('ERROR: Only host can start the game', 'error');
+      this.log('ERROR: Only room creator can start the game', 'error');
       return;
     }
 
@@ -337,82 +254,16 @@ export class NetworkManager {
       return;
     }
 
-    import('./gameEngine.js').then(({ createGameState }) => {
-      const playerNames = this.players.map((p, i) => p.name || `Player ${i + 1}`);
-      this.log(`Creating game state for: ${playerNames.join(', ')} on map: ${mapId}`);
-
-      const state = createGameState(playerNames, mapId);
-
-      // Assign game player IDs in lobby order.
-      this.players.forEach((playerInfo, i) => {
-        playerInfo.playerId = state.players[i].id;
-        if (!playerInfo.clientId) {
-          playerInfo.clientId = `legacy_${i}_${playerInfo.name}`;
-        }
-      });
-
-      // Host is index 0 in lobby order.
-      this.localPlayerId = this.players[0].playerId;
-      this.log(`Host is player 0: ${this.players[0].name} (ID: ${this.localPlayerId})`);
-
-      this.callback('game-start', {
-        type: 'game-start',
-        state: JSON.parse(JSON.stringify(state)),
-        localId: this.players[0].playerId,
-        playerIndex: 0
-      });
-
-      // Send per-player assignments (including clientId) to server for reconnect support.
-      const playerAssignments = this.players.map((p, i) => ({
-        name: p.name,
-        clientId: p.clientId,
-        localId: p.playerId,
-        playerIndex: i
-      }));
-
-      const clientState = this.stripCardDecks(state);
-      this.log(`Sending game-start to server (${JSON.stringify(clientState).length} bytes)`);
-
-      this.socket.emit('start-game', {
-        state: clientState,
-        playerAssignments
-      });
-
-      // Send full state backup immediately so server has it for host migration
-      this.socket.emit('host-state-backup', { state: JSON.parse(JSON.stringify(state)) });
-
-      this.log('=== Game start complete ===');
-    }).catch(err => {
-      this.log(`FATAL: Failed to start game: ${err.message}`, 'error');
-      console.error(err);
-      this.callback('error', { message: 'Failed to initialize game. Please try again.' });
-    });
-  }
-
-  broadcastState(state) {
-    if (!this.isHost || !this.socket) return;
-    this.socket.emit('state-update', { state: this.stripCardDecks(state) });
-    // Send full state backup (with card decks) for host migration support
-    this.socket.emit('host-state-backup', { state: JSON.parse(JSON.stringify(state)) });
-  }
-
-  broadcastGlobalNews(card) {
-    if (!this.isHost || !this.socket) return;
-    this.socket.emit('global-news', { card });
-  }
-
-  broadcastAnimation(type, data) {
-    if (!this.isHost || !this.socket || !type) return;
-    this.socket.emit('animation', { type, data });
+    // Server creates the game state — just tell it the map
+    this.socket.emit('start-game', { mapId });
+    this.log(`Requested game start with map: ${mapId}`);
   }
 
   sendAction(action) {
-    if (this.isHost) return; // Host processes locally
     if (!this.socket) {
       this.log('Cannot send action - not connected', 'error');
       return;
     }
-    // Always include the sender's player ID so host can attribute any-player actions.
     action.fromPlayerId = this.localPlayerId;
     this.log(`Sending action: ${action.actionType}`);
     this.socket.emit('game-action', action);
@@ -425,27 +276,6 @@ export class NetworkManager {
     if (this.callback) {
       this.callback('chat', msg);
     }
-  }
-
-  registerHostListeners() {
-    if (!this.socket || this.hostListenersRegistered) return;
-    this.hostListenersRegistered = true;
-
-    const callback = this.callback;
-    if (!callback) return;
-
-    this.socket.on('game-action', (data) => {
-      this.log(`Received action: ${data.actionType}`);
-      callback('action', data);
-    });
-
-    this.socket.on('player-connection', (data) => {
-      callback('player-connection', data);
-    });
-
-    this.socket.on('player-kicked', (data) => {
-      callback('player-kicked', data);
-    });
   }
 
   kickPlayer(playerId) {
@@ -461,7 +291,6 @@ export class NetworkManager {
     }
     this.isHost = false;
     this.callback = null;
-    this.hostListenersRegistered = false;
     this.players = [];
     this.localPlayerId = null;
     this.roomCode = '';

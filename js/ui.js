@@ -789,95 +789,7 @@ function hostOnlineGame(name) {
 
   network.host(name, (event, data) => {
     console.log(`[UI-HOST] Received event: ${event}`, data);
-
-    switch (event) {
-      case 'room-created':
-        console.log('[UI-HOST] Room created with code:', data.code);
-        lobbyRoomCode = data.code;
-        setChatRoomScope(lobbyRoomCode, true);
-        render();
-        break;
-      case 'joined':
-        console.log('[UI-HOST] Rejoined room, players now:', data.players);
-        lobbyPlayers = data.players;
-        if (!data.rejoined) {
-          setChatRoomScope(lobbyRoomCode, true);
-        }
-        render();
-        break;
-      case 'player-joined':
-        console.log('[UI-HOST] Player joined, players now:', data.players);
-        lobbyPlayers = data.players;
-        render();
-        break;
-      case 'player-left':
-        console.log('[UI-HOST] Player left, players now:', data.players);
-        lobbyPlayers = data.players;
-        render();
-        break;
-      case 'game-start':
-        console.log('[UI-HOST] === GAME START ===');
-        console.log('[UI-HOST] Local player ID:', data.localId);
-        engine = new GameEngine(data.state);
-        localPlayerId = data.localId;
-        // Host: broadcast state to all clients whenever state changes
-        engine.on(() => {
-          render();
-          if (network && network.isHost) {
-            network.broadcastState(engine.state);
-          }
-        });
-        engine.onAnimation((type, d) => handleAnimation(type, d));
-        knownOwners = new Set();
-        resetMonopolyTracking(true);
-        appScreen = 'game';
-        console.log('[UI-HOST] Switching to game screen');
-        render();
-        break;
-      case 'state-update':
-        if (engine) {
-          // Deep merge state to preserve engine methods
-          Object.assign(engine.state, data.state);
-          // Also update the board array properly
-          if (data.state.board) {
-            engine.state.board = data.state.board;
-          }
-          if (data.state.players) {
-            engine.state.players = data.state.players;
-          }
-          if (engine.state.lastDice) {
-            applyAuthoritativeDice(engine.state.lastDice);
-          }
-          render();
-        }
-        break;
-      case 'action':
-        handleRemoteAction(data);
-        break;
-      case 'player-connection':
-        handleHostPlayerConnection(data);
-        break;
-      case 'player-kicked':
-        handleHostPlayerKicked(data);
-        break;
-      case 'animation':
-        if (data?.type) {
-          handleAnimation(data.type, data.data);
-        }
-        break;
-      case 'chat':
-        addChatMessage(data);
-        render();
-        break;
-      case 'error':
-        if (appScreen === 'game') {
-          resetToLobby(data.message || 'Connection lost.');
-        } else {
-          lobbyError = data.message;
-          render();
-        }
-        break;
-    }
+    handleOnlineEvent(event, data, true);
   });
 }
 
@@ -895,193 +807,92 @@ function joinOnlineGame(name, code) {
 
   network.join(name, code, (event, data) => {
     console.log(`[UI-CLIENT] Received event: ${event}`, data);
-
-    switch (event) {
-      case 'joined':
-        console.log('[UI-CLIENT] Successfully joined room');
-        lobbyRoomCode = code;
-        setChatRoomScope(lobbyRoomCode, !data.rejoined);
-        lobbyPlayers = data.players;
-        render();
-        break;
-      case 'player-joined':
-      case 'player-left':
-        console.log('[UI-CLIENT] Player list updated');
-        lobbyPlayers = data.players;
-        render();
-        break;
-      case 'game-start':
-        console.log('[UI-CLIENT] === GAME START RECEIVED ===');
-        console.log('[UI-CLIENT] Local player ID:', data.localId);
-        console.log('[UI-CLIENT] Player index:', data.playerIndex);
-        engine = new GameEngine(data.state);
-        localPlayerId = data.localId;
-        engine.on(() => render());
-        engine.onAnimation((type, d) => handleAnimation(type, d));
-        knownOwners = new Set();
-        resetMonopolyTracking(true);
-        appScreen = 'game';
-        console.log('[UI-CLIENT] Switching to game screen');
-        render();
-        break;
-      case 'state-update':
-        if (engine) {
-          // Deep merge state to preserve engine methods
-          Object.assign(engine.state, data.state);
-          // Also update the board array properly
-          if (data.state.board) {
-            engine.state.board = data.state.board;
-          }
-          if (data.state.players) {
-            engine.state.players = data.state.players;
-          }
-          if (engine.state.lastDice) {
-            applyAuthoritativeDice(engine.state.lastDice);
-          }
-          render();
-        }
-        break;
-      case 'global-news':
-        // Show global news card to all players
-        if (data.card) {
-          currentCardDisplay = data.card;
-          showCardModal = true;
-          render();
-        }
-        break;
-      case 'animation':
-        if (data?.type) {
-          handleAnimation(data.type, data.data);
-        }
-        break;
-      case 'chat':
-        addChatMessage(data);
-        render();
-        break;
-      case 'promote-to-host': {
-        console.log('[UI-CLIENT] === PROMOTED TO HOST ===');
-
-        // Cancel any in-progress animations
-        movementAnimationInProgress = false;
-        pendingRenderAfterAnimation = false;
-        pendingPostMoveSounds = [];
-        diceAnimationInProgress = false;
-        animatingDice = false;
-
-        // Use full state from server backup, fall back to current engine state
-        let fullState = data.fullState;
-        if (!fullState && engine) {
-          console.warn('[UI] No full state backup from server, using current engine state');
-          fullState = JSON.parse(JSON.stringify(engine.state));
-        }
-        if (!fullState) {
-          console.error('[UI] No state available for host migration!');
-          break;
-        }
-
-        // Reconstruct GameEngine with full state (including card decks)
-        engine = new GameEngine(fullState);
-
-        // Find our localPlayerId from assignments
-        if (data.playerAssignments && network) {
-          const myAssignment = data.playerAssignments.find(a => a.clientId === network.clientId);
-          if (myAssignment) {
-            localPlayerId = myAssignment.localId;
-          }
-        }
-
-        // Reconcile player connectivity from server room membership.
-        if (Array.isArray(data.participants)) {
-          const connectedByPlayerId = new Map();
-          data.participants.forEach((participant) => {
-            if (participant?.playerId) {
-              connectedByPlayerId.set(participant.playerId, participant.connected !== false);
-            }
-          });
-          engine.state.players.forEach((player) => {
-            if (connectedByPlayerId.has(player.id)) {
-              player.connected = connectedByPlayerId.get(player.id);
-            }
-          });
-        }
-
-        // Rebuild ownership tracking before any emitted re-render.
-        knownOwners = new Set();
-        engine.state.board.forEach((space, i) => {
-          if (space.owner) knownOwners.add(i);
-        });
-        resetMonopolyTracking(true);
-
-        // Register host-pattern callbacks: render + broadcast state
-        engine.on(() => {
-          render();
-          if (network && network.isHost) {
-            network.broadcastState(engine.state);
-          }
-        });
-        engine.onAnimation((type, d) => handleAnimation(type, d));
-
-        // Update UI state flags
-        lobbyIsHost = true;
-
-        // Register host-only socket listeners (game-action, player-connection, player-kicked)
-        network.registerHostListeners();
-
-        // Log the migration event in the game log
-        engine.log('Host migration complete - you are now the game host.', 'success');
-
-        // If the disconnected host was active, skip their turn immediately.
-        let skippedDisconnectedTurn = false;
-        const activeAfterMigration = engine.getCurrentPlayer();
-        if (activeAfterMigration && activeAfterMigration.connected === false && !activeAfterMigration.bankrupt && !engine.state.gameOver) {
-          skippedDisconnectedTurn = true;
-          engine.log(`${activeAfterMigration.name} is disconnected. Skipping their turn.`, 'warning');
-          engine.state.lastDice = null;
-          engine.nextTurn();
-        }
-
-        if (!skippedDisconnectedTurn) {
-          render();
-          if (network && network.isHost) {
-            network.broadcastState(engine.state);
-          }
-        }
-        break;
-      }
-      case 'host-migrated':
-        console.log('[UI-CLIENT] Host migration occurred. New host:', data.newHostName);
-        if (engine) {
-          engine.log(`Host migrated: ${data.newHostName} is now the host.`, 'warning');
-          render();
-        }
-        break;
-      case 'host-reconnect-waiting': {
-        const waitSeconds = Number.isFinite(data?.waitSeconds)
-          ? data.waitSeconds
-          : Math.max(1, Math.ceil((data?.waitMs || 0) / 1000));
-        const hostName = data?.hostName || 'Host';
-        if (engine) {
-          engine.log(`${hostName} disconnected. Waiting up to ${waitSeconds}s for reconnection...`, 'warning');
-          render();
-        } else {
-          lobbyError = `${hostName} disconnected. Waiting up to ${waitSeconds}s for reconnection...`;
-          render();
-        }
-        break;
-      }
-      case 'kicked':
-        resetToLobby(data.message || 'You were removed by the host.');
-        break;
-      case 'error':
-        if (appScreen === 'game') {
-          resetToLobby(data.message || 'Connection lost.');
-        } else {
-          lobbyError = data.message;
-          render();
-        }
-        break;
-    }
+    handleOnlineEvent(event, data, false);
   });
+}
+
+// Unified event handler for both host (room creator) and non-host clients.
+// Server-authoritative: all game logic runs on server, all clients are equal.
+function handleOnlineEvent(event, data, isCreator) {
+  const tag = isCreator ? '[UI-HOST]' : '[UI-CLIENT]';
+
+  switch (event) {
+    case 'room-created':
+      console.log(tag, 'Room created with code:', data.code);
+      lobbyRoomCode = data.code;
+      setChatRoomScope(lobbyRoomCode, true);
+      render();
+      break;
+    case 'joined':
+      console.log(tag, 'Joined room, players now:', data.players);
+      if (!lobbyRoomCode && network) lobbyRoomCode = network.roomCode;
+      setChatRoomScope(lobbyRoomCode, !data.rejoined);
+      lobbyPlayers = data.players;
+      render();
+      break;
+    case 'player-joined':
+    case 'player-left':
+      console.log(tag, 'Player list updated:', data.players);
+      lobbyPlayers = data.players;
+      render();
+      break;
+    case 'game-start':
+      console.log(tag, '=== GAME START ===');
+      console.log(tag, 'Local player ID:', data.localId);
+      engine = new GameEngine(data.state);
+      localPlayerId = data.localId;
+      // All clients: just render on state change (server handles broadcasting)
+      engine.on(() => render());
+      engine.onAnimation((type, d) => handleAnimation(type, d));
+      knownOwners = new Set();
+      resetMonopolyTracking(true);
+      appScreen = 'game';
+      console.log(tag, 'Switching to game screen');
+      render();
+      break;
+    case 'state-update':
+      if (engine) {
+        Object.assign(engine.state, data.state);
+        if (data.state.board) {
+          engine.state.board = data.state.board;
+        }
+        if (data.state.players) {
+          engine.state.players = data.state.players;
+        }
+        if (engine.state.lastDice) {
+          applyAuthoritativeDice(engine.state.lastDice);
+        }
+        render();
+      }
+      break;
+    case 'global-news':
+      if (data.card) {
+        currentCardDisplay = data.card;
+        showCardModal = true;
+        render();
+      }
+      break;
+    case 'animation':
+      if (data?.type) {
+        handleAnimation(data.type, data.data);
+      }
+      break;
+    case 'chat':
+      addChatMessage(data);
+      render();
+      break;
+    case 'kicked':
+      resetToLobby(data.message || 'You were removed by the host.');
+      break;
+    case 'error':
+      if (appScreen === 'game') {
+        resetToLobby(data.message || 'Connection lost.');
+      } else {
+        lobbyError = data.message;
+        render();
+      }
+      break;
+  }
 }
 
 // ============================================================
@@ -2138,7 +1949,7 @@ function attachGameEvents() {
   document.querySelectorAll('[data-develop]').forEach(btn => {
     btn.addEventListener('click', () => {
       const pid = parseInt(btn.dataset.develop);
-      if (isOnlineClient()) {
+      if (isOnlineGame()) {
         network.sendAction({ actionType: 'develop-property', spaceId: pid });
         return;
       }
@@ -2150,7 +1961,7 @@ function attachGameEvents() {
     btn.addEventListener('click', () => {
       const pid = parseInt(btn.dataset.freeUpgrade);
       const playerId = localPlayerId || engine.getCurrentPlayer().id;
-      if (isOnlineClient()) {
+      if (isOnlineGame()) {
         network.sendAction({ actionType: 'free-upgrade', spaceId: pid });
         return;
       }
@@ -2161,7 +1972,7 @@ function attachGameEvents() {
   document.querySelectorAll('[data-mortgage]').forEach(btn => {
     btn.addEventListener('click', () => {
       const spaceId = parseInt(btn.dataset.mortgage);
-      if (isOnlineClient()) {
+      if (isOnlineGame()) {
         network.sendAction({ actionType: 'mortgage-property', spaceId });
         return;
       }
@@ -2171,7 +1982,7 @@ function attachGameEvents() {
   document.querySelectorAll('[data-unmortgage]').forEach(btn => {
     btn.addEventListener('click', () => {
       const spaceId = parseInt(btn.dataset.unmortgage);
-      if (isOnlineClient()) {
+      if (isOnlineGame()) {
         network.sendAction({ actionType: 'unmortgage-property', spaceId });
         return;
       }
@@ -2181,7 +1992,7 @@ function attachGameEvents() {
   document.querySelectorAll('[data-sell-dev]').forEach(btn => {
     btn.addEventListener('click', () => {
       const spaceId = parseInt(btn.dataset.sellDev);
-      if (isOnlineClient()) {
+      if (isOnlineGame()) {
         network.sendAction({ actionType: 'sell-development', spaceId });
         return;
       }
@@ -2191,7 +2002,7 @@ function attachGameEvents() {
   document.querySelectorAll('[data-sell-property]').forEach(btn => {
     btn.addEventListener('click', () => {
       const spaceId = parseInt(btn.dataset.sellProperty);
-      if (isOnlineClient()) {
+      if (isOnlineGame()) {
         network.sendAction({ actionType: 'sell-property', spaceId });
         return;
       }
@@ -2239,7 +2050,7 @@ function attachGameEvents() {
   document.querySelectorAll('[data-accept-trade]').forEach(btn => {
     btn.addEventListener('click', () => {
       const tradeId = btn.dataset.acceptTrade;
-      if (isOnlineClient()) {
+      if (isOnlineGame()) {
         network.sendAction({ actionType: 'accept-trade', tradeId });
         return;
       }
@@ -2250,7 +2061,7 @@ function attachGameEvents() {
   document.querySelectorAll('[data-reject-trade]').forEach(btn => {
     btn.addEventListener('click', () => {
       const tradeId = btn.dataset.rejectTrade;
-      if (isOnlineClient()) {
+      if (isOnlineGame()) {
         network.sendAction({ actionType: 'reject-trade', tradeId });
         return;
       }
@@ -2262,7 +2073,7 @@ function attachGameEvents() {
     btn.addEventListener('click', () => {
       const tradeId = btn.dataset.cancelTrade;
       const myId = localPlayerId || engine.getCurrentPlayer().id;
-      if (isOnlineClient()) {
+      if (isOnlineGame()) {
         network.sendAction({ actionType: 'cancel-trade', tradeId });
         return;
       }
@@ -2337,33 +2148,8 @@ function resetToLobby(errorMessage = '') {
   render();
 }
 
-function handleHostPlayerConnection(data) {
-  if (!engine || !network || !network.isHost || !data?.playerId) return;
-  const player = engine.getPlayerById(data.playerId);
-  if (!player) return;
-
-  const isConnected = data.connected !== false;
-  if ((player.connected !== false) === isConnected) return;
-
-  const wasCurrentTurn = engine.getCurrentPlayer()?.id === player.id;
-  player.connected = isConnected;
-  engine.log(
-    `${player.name} ${isConnected ? 'reconnected.' : 'disconnected.'}`,
-    isConnected ? 'success' : 'warning'
-  );
-
-  if (!isConnected && wasCurrentTurn && !engine.state.gameOver) {
-    engine.log(`${player.name}'s turn was skipped due to disconnect.`, 'warning');
-    engine.state.lastDice = null;
-    engine.nextTurn();
-    return;
-  }
-
-  engine.emit();
-}
-
 function handleKickPlayer(playerId) {
-  if (!network || !network.isHost || !engine || !playerId) return;
+  if (!network || !lobbyIsHost || !engine || !playerId) return;
   const target = engine.getPlayerById(playerId);
   if (!target || target.id === localPlayerId || target.bankrupt) return;
 
@@ -2371,20 +2157,6 @@ function handleKickPlayer(playerId) {
   const confirmed = confirm(`Kick ${target.name} ${reason}? This cannot be undone.`);
   if (!confirmed) return;
   network.kickPlayer(playerId);
-}
-
-function handleHostPlayerKicked(data) {
-  if (!engine || !network || !network.isHost || !data?.playerId) return;
-  const player = engine.getPlayerById(data.playerId);
-  if (!player || player.bankrupt) return;
-
-  const wasCurrentTurn = engine.getCurrentPlayer()?.id === player.id;
-  player.connected = false;
-  engine.declareBankruptcy(player);
-
-  if (wasCurrentTurn && !engine.state.gameOver) {
-    engine.endTurn();
-  }
 }
 
 // ---- Action Handlers ----
@@ -2400,102 +2172,9 @@ function canPerformAction() {
   return true;
 }
 
-// Check if we are an online client (not host) - actions should be sent to host
-function isOnlineClient() {
-  return network && !network.isHost && localPlayerId;
-}
-
-// Host: process an action received from a remote client
-function handleRemoteAction(data) {
-  if (!engine) return;
-  console.log('[UI-HOST] Processing remote action:', data.actionType, 'from:', data.fromPlayerId);
-
-  // Use the sender's player ID for actions any player can perform (trade, property mgmt).
-  // Fall back to current player for turn-based actions (roll, buy, end-turn).
-  const senderId = data.fromPlayerId || engine.getCurrentPlayer().id;
-  const activePlayerId = engine.getCurrentPlayer().id;
-  const requiresActiveTurn = () => {
-    if (senderId !== activePlayerId) {
-      console.warn('[UI-HOST] Ignoring turn action from non-active player:', data.actionType, 'sender:', senderId, 'active:', activePlayerId);
-      return false;
-    }
-    return true;
-  };
-
-  switch (data.actionType) {
-    // --- Turn-based actions (only active player can do these) ---
-    case 'roll-dice':
-      if (requiresActiveTurn() && engine.state.phase === 'pre-roll') {
-        engine.rollDiceAction();
-      }
-      break;
-    case 'pay-bail':
-      if (requiresActiveTurn()) {
-        engine.payBail(engine.getCurrentPlayer());
-      }
-      break;
-    case 'use-immunity': {
-      if (requiresActiveTurn()) {
-        const p = engine.getCurrentPlayer();
-        engine.useImmunityCard(p);
-      }
-      break;
-    }
-    case 'buy-property':
-      if (requiresActiveTurn()) {
-        engine.buyProperty(engine.getCurrentPlayer().id);
-      }
-      break;
-    case 'decline-purchase':
-      if (requiresActiveTurn()) {
-        engine.declinePurchase();
-      }
-      break;
-    case 'end-turn':
-      if (requiresActiveTurn()) {
-        engine.endTurn();
-      }
-      break;
-    case 'influence-action': {
-      if (data.action === 'embargo' && data.targetId) {
-        engine.useInfluenceAction(senderId, data.action, data.targetId);
-      } else {
-        engine.useInfluenceAction(senderId, data.action);
-      }
-      break;
-    }
-    // --- Any-player actions (use sender ID) ---
-    case 'propose-trade':
-      engine.proposeTrade(senderId, data.partnerId, data.offer);
-      break;
-    case 'accept-trade':
-      engine.acceptTrade(data.tradeId, senderId);
-      break;
-    case 'reject-trade':
-      engine.rejectTrade(data.tradeId, senderId);
-      break;
-    case 'cancel-trade':
-      engine.cancelTrade(data.tradeId, senderId);
-      break;
-    case 'develop-property':
-      engine.developProperty(senderId, data.spaceId);
-      break;
-    case 'free-upgrade':
-      engine.freeUpgradeProperty(senderId, data.spaceId);
-      break;
-    case 'mortgage-property':
-      engine.mortgageProperty(senderId, data.spaceId);
-      break;
-    case 'unmortgage-property':
-      engine.unmortgageProperty(senderId, data.spaceId);
-      break;
-    case 'sell-development':
-      engine.sellDevelopment(senderId, data.spaceId);
-      break;
-    case 'sell-property':
-      engine.sellProperty(senderId, data.spaceId);
-      break;
-  }
+// Check if we are in an online game — all actions should be sent to the server
+function isOnlineGame() {
+  return network && localPlayerId;
 }
 
 function handleRollDice() {
@@ -2534,10 +2213,9 @@ function handleRollDice() {
     return;
   }
 
-  // Online client: send action to host, show local animation
-  if (isOnlineClient()) {
+  // Online game: send action to server, show local dice animation for responsiveness
+  if (isOnlineGame()) {
     network.sendAction({ actionType: 'roll-dice' });
-    // Play local dice animation for responsiveness
     diceAnimationInProgress = true;
     animatingDice = true;
     sound.playDiceRoll();
@@ -2555,13 +2233,13 @@ function handleRollDice() {
         } else {
           renderDiceFaceAndTotal(false, '');
         }
-        // State update from host will trigger render with actual dice values
+        // State update from server will trigger render with actual dice values
       }
     }, 80);
     return;
   }
 
-  // Host or local: process locally
+  // Local game: process locally
   diceAnimationInProgress = true;
   animatingDice = true;
   sound.playDiceRoll();
@@ -2606,7 +2284,7 @@ function handleRollDice() {
 
 function handlePayBail() {
   if (!canPerformAction()) return;
-  if (isOnlineClient()) {
+  if (isOnlineGame()) {
     network.sendAction({ actionType: 'pay-bail' });
     return;
   }
@@ -2617,7 +2295,7 @@ function handlePayBail() {
 
 function handleUseImmunity() {
   if (!canPerformAction()) return;
-  if (isOnlineClient()) {
+  if (isOnlineGame()) {
     network.sendAction({ actionType: 'use-immunity' });
     return;
   }
@@ -2628,7 +2306,7 @@ function handleUseImmunity() {
 
 function handleBuyProperty() {
   if (!canPerformAction()) return;
-  if (isOnlineClient()) {
+  if (isOnlineGame()) {
     network.sendAction({ actionType: 'buy-property' });
     return;
   }
@@ -2640,7 +2318,7 @@ function handleBuyProperty() {
 
 function handleDecline() {
   if (!canPerformAction()) return;
-  if (isOnlineClient()) {
+  if (isOnlineGame()) {
     network.sendAction({ actionType: 'decline-purchase' });
     return;
   }
@@ -2650,7 +2328,7 @@ function handleDecline() {
 function handleEndTurn() {
   if (!engine) return;
   if (!canPerformAction()) return;
-  if (isOnlineClient()) {
+  if (isOnlineGame()) {
     network.sendAction({ actionType: 'end-turn' });
     return;
   }
@@ -2667,7 +2345,7 @@ function handleEndTurn() {
 function handleInfluenceAction(action) {
   if (!canPerformAction()) return;
   const player = engine.getCurrentPlayer();
-  if (isOnlineClient()) {
+  if (isOnlineGame()) {
     let targetId = null;
     if (action === 'embargo') {
       const others = engine.getActivePlayers().filter(p => p.id !== player.id);
@@ -2688,7 +2366,7 @@ function handleInfluenceAction(action) {
 
 function handleSendTrade() {
   if (!selectedTradePartner) return;
-  if (isOnlineClient()) {
+  if (isOnlineGame()) {
     network.sendAction({ actionType: 'propose-trade', partnerId: selectedTradePartner, offer: { ...tradeOffer } });
     showTradePanel = false;
     tradeOffer = { giveMoney: 0, getMoney: 0, giveProperties: [], getProperties: [] };
@@ -2796,9 +2474,6 @@ function handleAnimation(type, data) {
       sound.playDiceRoll();
       break;
     case 'move':
-      if (network && network.isHost && data && data.from !== undefined && data.to !== undefined) {
-        network.broadcastAnimation('move', data);
-      }
       sound.playMove();
       // Animate player movement from cell to cell
       if (data && data.from !== undefined && data.to !== undefined) {
@@ -2817,15 +2492,9 @@ function handleAnimation(type, data) {
       break;
     case 'card': {
       sound.playCard();
-      const isGlobalNews = data.deckType === 'globalNews';
-      // Broadcast Global News cards to all players via server
-      if (network && network.isHost && isGlobalNews) {
-        network.broadcastGlobalNews(data.card);
-      }
-      // Show card modal: Global News always shown, Diplomatic Cables only for the local player
-      const currentTurnPlayer = engine?.getCurrentPlayer();
-      const isLocalPlayerCard = !localPlayerId || currentTurnPlayer?.id === localPlayerId;
-      if (isGlobalNews || isLocalPlayerCard) {
+      // Server handles card distribution: Global News to all, Diplomatic Cables to drawer only.
+      // If we receive it, we should show it.
+      if (data.card) {
         currentCardDisplay = data.card;
         showCardModal = true;
         render();
