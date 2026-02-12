@@ -797,6 +797,14 @@ function hostOnlineGame(name) {
         setChatRoomScope(lobbyRoomCode, true);
         render();
         break;
+      case 'joined':
+        console.log('[UI-HOST] Rejoined room, players now:', data.players);
+        lobbyPlayers = data.players;
+        if (!data.rejoined) {
+          setChatRoomScope(lobbyRoomCode, true);
+        }
+        render();
+        break;
       case 'player-joined':
         console.log('[UI-HOST] Player joined, players now:', data.players);
         lobbyPlayers = data.players;
@@ -1047,6 +1055,20 @@ function joinOnlineGame(name, code) {
           render();
         }
         break;
+      case 'host-reconnect-waiting': {
+        const waitSeconds = Number.isFinite(data?.waitSeconds)
+          ? data.waitSeconds
+          : Math.max(1, Math.ceil((data?.waitMs || 0) / 1000));
+        const hostName = data?.hostName || 'Host';
+        if (engine) {
+          engine.log(`${hostName} disconnected. Waiting up to ${waitSeconds}s for reconnection...`, 'warning');
+          render();
+        } else {
+          lobbyError = `${hostName} disconnected. Waiting up to ${waitSeconds}s for reconnection...`;
+          render();
+        }
+        break;
+      }
       case 'kicked':
         resetToLobby(data.message || 'You were removed by the host.');
         break;

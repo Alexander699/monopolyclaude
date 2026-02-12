@@ -31,6 +31,8 @@ const rooms = new Map();
 const ROOM_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const MAX_PLAYERS = 8;
 const ROOM_TTL = 2 * 60 * 60 * 1000; // 2 hours
+const HOST_RECONNECT_GRACE_MS = 8000;
+const MIGRATION_TIMEOUT_MS = 60000;
 
 function generateRoomCode() {
   let code;
@@ -52,6 +54,18 @@ function normalizeClientId(clientId) {
 
 function log(msg) {
   console.log(`[${new Date().toISOString()}] ${msg}`);
+}
+
+function clearRoomTimers(room) {
+  if (!room) return;
+  if (room.hostDisconnectTimeout) {
+    clearTimeout(room.hostDisconnectTimeout);
+    room.hostDisconnectTimeout = null;
+  }
+  if (room.migrationTimeout) {
+    clearTimeout(room.migrationTimeout);
+    room.migrationTimeout = null;
+  }
 }
 
 function orderedMembers(room) {
@@ -88,6 +102,11 @@ function attemptHostMigration(roomCode) {
   const room = rooms.get(roomCode);
   if (!room || !room.started) return false;
 
+  if (room.hostDisconnectTimeout) {
+    clearTimeout(room.hostDisconnectTimeout);
+    room.hostDisconnectTimeout = null;
+  }
+
   // Find best candidate: first connected, non-kicked member sorted by playerIndex
   const candidates = Array.from(room.members.values())
     .filter(m => m.connected && !m.kicked && m.clientId !== room.hostClientId)
@@ -106,9 +125,10 @@ function attemptHostMigration(roomCode) {
           io.to(roomCode).emit('error-msg', {
             message: 'Host disconnected and no players available. Session ended.'
           });
+          clearRoomTimers(r);
           rooms.delete(roomCode);
         }
-      }, 60000);
+      }, MIGRATION_TIMEOUT_MS);
     }
     return false;
   }
@@ -182,6 +202,7 @@ io.on('connection', (socket) => {
       latestState: null,
       fullStateBackup: null,
       playerAssignments: new Map(),
+      hostDisconnectTimeout: null,
       migrationTimeout: null
     };
 
@@ -202,7 +223,12 @@ io.on('connection', (socket) => {
     socket.join(code);
 
     log(`Room ${code} created by "${safeName}" (${socket.id})`);
-    socket.emit('room-created', { code, clientId: resolvedClientId, ...rosterPayload(room) });
+    socket.emit('room-created', {
+      code,
+      clientId: resolvedClientId,
+      isHost: true,
+      ...rosterPayload(room)
+    });
   });
 
   // --- Client joins or rejoins a room ---
@@ -237,6 +263,7 @@ io.on('connection', (socket) => {
         if (oldSocket) oldSocket.disconnect(true);
       }
 
+      const previousHostSocketId = room.hostSocketId;
       existingSeat.connected = true;
       existingSeat.socketId = socket.id;
       socket.data.clientId = resolvedClientId;
@@ -245,19 +272,32 @@ io.on('connection', (socket) => {
 
       log(`"${existingSeat.name}" rejoined room ${roomCode}`);
 
-      // Check if this is the old host reconnecting while no host is active
-      if (!room.hostSocketId && existingSeat.clientId === room.hostClientId) {
-        // Old host reconnects before migration timeout — re-promote them
+      const seatIsHost = existingSeat.clientId === room.hostClientId;
+      if (seatIsHost) {
+        room.hostSocketId = socket.id;
+        existingSeat.isHost = true;
+        if (room.hostDisconnectTimeout) {
+          clearTimeout(room.hostDisconnectTimeout);
+          room.hostDisconnectTimeout = null;
+        }
         if (room.migrationTimeout) {
           clearTimeout(room.migrationTimeout);
           room.migrationTimeout = null;
         }
-        room.hostSocketId = socket.id;
-        existingSeat.isHost = true;
+      }
+
+      // Check if this is the old host reconnecting while no host is active
+      if (seatIsHost && !previousHostSocketId) {
+        // Old host reconnects before migration timeout — re-promote them
         log(`Old host "${existingSeat.name}" reclaimed host in room ${roomCode}`);
 
         const assignment = room.playerAssignments.get(resolvedClientId);
-        socket.emit('joined', { ...rosterPayload(room), rejoined: true, clientId: resolvedClientId });
+        socket.emit('joined', {
+          ...rosterPayload(room),
+          rejoined: true,
+          clientId: resolvedClientId,
+          isHost: true
+        });
         if (assignment && room.fullStateBackup) {
           io.to(socket.id).emit('promote-to-host', {
             fullState: room.fullStateBackup,
@@ -296,10 +336,15 @@ io.on('connection', (socket) => {
         return;
       }
 
-      socket.emit('joined', { ...rosterPayload(room), rejoined: true, clientId: resolvedClientId });
+      socket.emit('joined', {
+        ...rosterPayload(room),
+        rejoined: true,
+        clientId: resolvedClientId,
+        isHost: room.hostClientId === resolvedClientId
+      });
 
       // If no host is active (all players had disconnected), retry migration now.
-      if (!room.hostSocketId) {
+      if (!room.hostSocketId && !room.hostDisconnectTimeout) {
         log(`No active host in room ${roomCode} after "${existingSeat.name}" rejoined - retrying migration`);
         attemptHostMigration(roomCode);
       }
@@ -343,13 +388,27 @@ io.on('connection', (socket) => {
         if (oldSocket) oldSocket.disconnect(true);
       }
 
+      const seatIsHost = existingSeat.clientId === room.hostClientId;
       existingSeat.connected = true;
       existingSeat.socketId = socket.id;
+      if (seatIsHost) {
+        room.hostSocketId = socket.id;
+        existingSeat.isHost = true;
+        if (room.hostDisconnectTimeout) {
+          clearTimeout(room.hostDisconnectTimeout);
+          room.hostDisconnectTimeout = null;
+        }
+      }
       socket.data.clientId = resolvedClientId;
       currentRoom = roomCode;
       socket.join(roomCode);
 
-      socket.emit('joined', { ...rosterPayload(room), rejoined: true, clientId: resolvedClientId });
+      socket.emit('joined', {
+        ...rosterPayload(room),
+        rejoined: true,
+        clientId: resolvedClientId,
+        isHost: room.hostClientId === resolvedClientId
+      });
       socket.to(roomCode).emit('player-joined', {
         ...rosterPayload(room),
         newPlayer: existingSeat.name,
@@ -386,7 +445,11 @@ io.on('connection', (socket) => {
     socket.join(roomCode);
 
     log(`"${safeName}" joined room ${roomCode} (${orderedMembers(room).length} players)`);
-    socket.emit('joined', { ...rosterPayload(room), clientId: resolvedClientId });
+    socket.emit('joined', {
+      ...rosterPayload(room),
+      clientId: resolvedClientId,
+      isHost: false
+    });
     socket.to(roomCode).emit('player-joined', {
       ...rosterPayload(room),
       newPlayer: safeName
@@ -556,21 +619,53 @@ io.on('connection', (socket) => {
         hostMember.connected = false;
         hostMember.socketId = null;
       }
+      room.hostSocketId = null;
+
+      if (room.hostDisconnectTimeout) {
+        clearTimeout(room.hostDisconnectTimeout);
+        room.hostDisconnectTimeout = null;
+      }
 
       if (!room.started) {
-        // Lobby phase: close room as before
+        // Lobby phase: allow brief reconnect before closing room
         const hostName = hostMember?.name || 'Host';
-        log(`Host "${hostName}" left lobby room ${currentRoom} - closing room`);
-        io.to(currentRoom).emit('error-msg', {
-          message: 'Host disconnected. The lobby has been closed.'
-        });
-        rooms.delete(currentRoom);
+        const roomCode = currentRoom;
+        log(`Host "${hostName}" disconnected from lobby ${roomCode} - waiting ${HOST_RECONNECT_GRACE_MS}ms`);
+        room.hostDisconnectTimeout = setTimeout(() => {
+          const r = rooms.get(roomCode);
+          if (!r || r.hostSocketId) return;
+          log(`Host "${hostName}" did not return to lobby ${roomCode} - closing room`);
+          io.to(roomCode).emit('error-msg', {
+            message: 'Host disconnected. The lobby has been closed.'
+          });
+          clearRoomTimers(r);
+          rooms.delete(roomCode);
+        }, HOST_RECONNECT_GRACE_MS);
         return;
       }
 
-      // Active game: attempt host migration
-      log(`Host disconnected from active room ${currentRoom} - attempting migration`);
-      attemptHostMigration(currentRoom);
+      if (room.migrationTimeout) {
+        clearTimeout(room.migrationTimeout);
+        room.migrationTimeout = null;
+      }
+
+      // Active game: allow host a short reconnect window before migration.
+      const roomCode = currentRoom;
+      const waitSeconds = Math.ceil(HOST_RECONNECT_GRACE_MS / 1000);
+      io.to(roomCode).emit('host-reconnect-waiting', {
+        hostName: hostMember?.name || 'Host',
+        waitMs: HOST_RECONNECT_GRACE_MS,
+        waitSeconds
+      });
+      log(`Host disconnected from active room ${roomCode} - waiting ${HOST_RECONNECT_GRACE_MS}ms before migration`);
+      room.hostDisconnectTimeout = setTimeout(() => {
+        const r = rooms.get(roomCode);
+        if (!r) return;
+        r.hostDisconnectTimeout = null;
+        if (r.hostSocketId) return;
+        log(`Host reconnect grace expired for room ${roomCode} - attempting migration`);
+        attemptHostMigration(roomCode);
+      }, HOST_RECONNECT_GRACE_MS);
       return;
     }
 
@@ -612,6 +707,7 @@ io.on('connection', (socket) => {
     });
 
     if (room.members.size === 0) {
+      clearRoomTimers(room);
       rooms.delete(currentRoom);
       log(`Room ${currentRoom} deleted (empty)`);
     }
@@ -625,6 +721,7 @@ setInterval(() => {
     if (now - room.createdAt > ROOM_TTL) {
       log(`Cleaning up stale room ${code}`);
       io.to(code).emit('error-msg', { message: 'Room expired due to inactivity.' });
+      clearRoomTimers(room);
       rooms.delete(code);
     }
   }

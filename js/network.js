@@ -123,6 +123,15 @@ export class NetworkManager {
     this.connectSocket();
 
     this.socket.on('connect', () => {
+      if (this.roomCode) {
+        this.log(`Rejoining room: ${this.roomCode}`);
+        this.socket.emit('join-room', {
+          code: this.roomCode,
+          name,
+          clientId: this.clientId
+        });
+        return;
+      }
       this.socket.emit('create-room', { name, clientId: this.clientId });
     });
 
@@ -130,11 +139,24 @@ export class NetworkManager {
       this.log(`Room created: ${data.code}`);
       this.roomCode = data.code;
       if (data.clientId) this.persistClientId(data.clientId);
+      if (typeof data.isHost === 'boolean') this.isHost = data.isHost;
       this.setPlayers(data.players, data.participants);
       callback('room-created', {
         code: data.code,
         players: this.players.map(p => p.name),
         participants: this.players
+      });
+    });
+
+    this.socket.on('joined', (data) => {
+      this.log(`Rejoined room with players: ${(data.players || []).join(', ')}`);
+      if (data.clientId) this.persistClientId(data.clientId);
+      if (typeof data.isHost === 'boolean') this.isHost = data.isHost;
+      this.setPlayers(data.players, data.participants);
+      callback('joined', {
+        players: this.players.map(p => p.name),
+        participants: this.players,
+        rejoined: !!data.rejoined
       });
     });
 
@@ -208,6 +230,7 @@ export class NetworkManager {
     this.socket.on('joined', (data) => {
       this.log(`Joined room with players: ${(data.players || []).join(', ')}`);
       if (data.clientId) this.persistClientId(data.clientId);
+      if (typeof data.isHost === 'boolean') this.isHost = data.isHost;
       this.setPlayers(data.players, data.participants);
       callback('joined', {
         players: this.players.map(p => p.name),
@@ -281,6 +304,10 @@ export class NetworkManager {
     this.socket.on('host-migrated', (data) => {
       this.log(`Host migrated: new host is "${data.newHostName}"`);
       callback('host-migrated', data);
+    });
+
+    this.socket.on('host-reconnect-waiting', (data) => {
+      callback('host-reconnect-waiting', data);
     });
 
     this.socket.on('kicked', (data) => {
