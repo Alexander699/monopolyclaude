@@ -77,6 +77,7 @@ function addChatMessage(msg) {
 let animatingDice = false;
 let diceAnimationInProgress = false; // Moved here for proper scoping
 let diceValues = [1, 1];
+let pendingMoveAnimation = null; // Queue server move until dice animation completes
 let showCardModal = false;
 let currentCardDisplay = null;
 let appScreen = 'lobby'; // lobby, game, gameover
@@ -408,7 +409,12 @@ function render() {
 
   // CRITICAL: If movement animation is in progress, defer render so the
   // floating token is not destroyed by innerHTML replacement.
-  if (movementAnimationInProgress) {
+  if (movementAnimationInProgress || (diceAnimationInProgress && pendingMoveAnimation)) {
+    return;
+  }
+
+  // If a move arrived during dice roll, start it now before re-rendering.
+  if (startPendingMoveAnimationIfReady()) {
     return;
   }
 
@@ -2135,6 +2141,10 @@ function resetToLobby(errorMessage = '') {
     network.destroy();
     network = null;
   }
+  animatingDice = false;
+  diceAnimationInProgress = false;
+  pendingMoveAnimation = null;
+  movementAnimationInProgress = false;
   engine = null;
   localPlayerId = null;
   lobbyRoomCode = '';
@@ -2233,6 +2243,7 @@ function handleRollDice() {
         } else {
           renderDiceFaceAndTotal(false, '');
         }
+        startPendingMoveAnimationIfReady();
         // State update from server will trigger render with actual dice values
       }
     }, 80);
@@ -2275,6 +2286,7 @@ function handleRollDice() {
 
       // Reset animation flag AFTER engine call completes
       diceAnimationInProgress = false;
+      startPendingMoveAnimationIfReady();
 
       // Full render after engine processes the roll
       render();
@@ -2474,10 +2486,13 @@ function handleAnimation(type, data) {
       sound.playDiceRoll();
       break;
     case 'move':
-      sound.playMove();
-      // Animate player movement from cell to cell
       if (data && data.from !== undefined && data.to !== undefined) {
-        animatePlayerMovement(data.playerId, data.from, data.to);
+        // Keep move animation visually after dice animation (online sync).
+        if (diceAnimationInProgress || movementAnimationInProgress) {
+          pendingMoveAnimation = { playerId: data.playerId, from: data.from, to: data.to };
+        } else {
+          animatePlayerMovement(data.playerId, data.from, data.to);
+        }
       }
       break;
     case 'purchase':
@@ -2524,6 +2539,14 @@ let pendingPostMoveSounds = [];
 const MOVE_STEP_DELAY_MS = 95;
 const MOVE_START_DELAY_MS = 80;
 
+function startPendingMoveAnimationIfReady() {
+  if (!pendingMoveAnimation) return false;
+  if (diceAnimationInProgress || movementAnimationInProgress) return false;
+  const nextMove = pendingMoveAnimation;
+  pendingMoveAnimation = null;
+  return animatePlayerMovement(nextMove.playerId, nextMove.from, nextMove.to);
+}
+
 function queuePostMoveSound(playFn) {
   if (typeof playFn !== 'function') return;
   pendingPostMoveSounds.push(playFn);
@@ -2543,10 +2566,10 @@ function flushPostMoveSounds() {
 }
 
 function animatePlayerMovement(playerId, fromPos, toPos) {
-  if (movementAnimationInProgress) return;
+  if (movementAnimationInProgress) return false;
 
   const player = engine?.getPlayerById(playerId);
-  if (!player) return;
+  if (!player) return false;
 
   // Calculate path (handles wrapping around GO)
   const path = [];
@@ -2556,7 +2579,7 @@ function animatePlayerMovement(playerId, fromPos, toPos) {
     path.push(current);
   }
 
-  if (path.length === 0) return;
+  if (path.length === 0) return false;
 
   movementAnimationInProgress = true;
   pendingRenderAfterAnimation = true;
@@ -2565,7 +2588,7 @@ function animatePlayerMovement(playerId, fromPos, toPos) {
   if (!board) {
     movementAnimationInProgress = false;
     pendingRenderAfterAnimation = false;
-    return;
+    return false;
   }
 
   // Create a floating token that will slide across the board
@@ -2620,6 +2643,9 @@ function animatePlayerMovement(playerId, fromPos, toPos) {
       movementAnimationInProgress = false;
       pendingRenderAfterAnimation = false;
       flushPostMoveSounds();
+      if (startPendingMoveAnimationIfReady()) {
+        return;
+      }
       render();
       return;
     }
@@ -2631,6 +2657,7 @@ function animatePlayerMovement(playerId, fromPos, toPos) {
   }
 
   setTimeout(animateStep, MOVE_START_DELAY_MS);
+  return true;
 }
 
 // ---- Helpers ----
