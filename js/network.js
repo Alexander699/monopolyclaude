@@ -53,20 +53,22 @@ export class NetworkManager {
         name: p.name,
         clientId: p.clientId || null,
         playerId: p.playerId || null,
-        connected: p.connected !== false
+        connected: p.connected !== false,
+        avatarIndex: Number.isInteger(p.avatarIndex) ? p.avatarIndex : null
       }));
       return;
     }
 
     this.players = (players || []).map((entry) => {
       if (typeof entry === 'string') {
-        return { name: entry, clientId: null, playerId: null, connected: true };
+        return { name: entry, clientId: null, playerId: null, connected: true, avatarIndex: null };
       }
       return {
         name: entry?.name || 'Player',
         clientId: entry?.clientId || null,
         playerId: entry?.playerId || null,
-        connected: entry?.connected !== false
+        connected: entry?.connected !== false,
+        avatarIndex: Number.isInteger(entry?.avatarIndex) ? entry.avatarIndex : null
       };
     });
   }
@@ -276,6 +278,11 @@ export class NetworkManager {
     if (this.callback) {
       this.callback('chat', msg);
     }
+  }
+
+  updateAvatar(avatarIndex) {
+    if (!this.socket) return;
+    this.socket.emit('update-avatar', { avatarIndex });
   }
 
   kickPlayer(playerId) {

@@ -384,6 +384,25 @@ body {
   border: 2px solid;
   border-radius: 20px;
   font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.lobby-player-chip-local {
+  padding: 4px 6px 4px 4px;
+}
+
+.lobby-player-chip-local .player-avatar-picker {
+  border: none;
+  background: transparent;
+  padding: 0;
+}
+
+.lobby-player-chip-local .avatar-cycle-btn {
+  width: 18px;
+  height: 18px;
+  font-size: 10px;
 }
 
 .lobby-error {

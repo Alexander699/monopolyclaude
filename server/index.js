@@ -83,7 +83,8 @@ function rosterPayload(room, extra = {}) {
       clientId: m.clientId,
       connected: !!m.connected,
       playerId: m.playerId || null,
-      playerIndex: Number.isInteger(m.playerIndex) ? m.playerIndex : null
+      playerIndex: Number.isInteger(m.playerIndex) ? m.playerIndex : null,
+      avatarIndex: Number.isInteger(m.avatarIndex) ? m.avatarIndex : null
     })),
     ...extra
   };
@@ -341,7 +342,8 @@ io.on('connection', (socket) => {
       kicked: false,
       isCreator: true,
       playerId: null,
-      playerIndex: null
+      playerIndex: null,
+      avatarIndex: 0
     });
 
     rooms.set(code, room);
@@ -495,7 +497,8 @@ io.on('connection', (socket) => {
       kicked: false,
       isCreator: false,
       playerId: null,
-      playerIndex: null
+      playerIndex: null,
+      avatarIndex: orderedMembers(room).length
     });
 
     socket.data.clientId = resolvedClientId;
@@ -514,6 +517,24 @@ io.on('connection', (socket) => {
     });
   });
 
+  // --- Player updates their avatar selection (lobby only) ---
+  socket.on('update-avatar', ({ avatarIndex }) => {
+    if (!currentRoom) return;
+    const room = rooms.get(currentRoom);
+    if (!room || room.started) return;
+    const resolvedClientId = socket.data.clientId;
+    if (!resolvedClientId) return;
+    const member = room.members.get(resolvedClientId);
+    if (!member || member.kicked) return;
+    if (!Number.isInteger(avatarIndex) || avatarIndex < 0) return;
+    member.avatarIndex = avatarIndex;
+    // Broadcast updated roster to all players in the room
+    io.to(currentRoom).emit('player-joined', {
+      ...rosterPayload(room),
+      avatarUpdate: true
+    });
+  });
+
   // --- Room creator starts the game (server creates the engine) ---
   socket.on('start-game', ({ mapId }) => {
     if (!currentRoom) return;
@@ -528,7 +549,8 @@ io.on('connection', (socket) => {
     }
 
     const playerNames = members.map(m => m.name);
-    const state = createGameState(playerNames, mapId || 'classic');
+    const avatarIndices = members.map(m => Number.isInteger(m.avatarIndex) ? m.avatarIndex : 0);
+    const state = createGameState(playerNames, mapId || 'classic', avatarIndices);
 
     // Assign player IDs to members
     room.playerAssignments.clear();

@@ -83,6 +83,7 @@ let currentCardDisplay = null;
 let appScreen = 'lobby'; // lobby, game, gameover
 let lobbyPlayers = [];
 let lobbyAvatarSelections = [];
+let lobbyParticipants = []; // Online lobby: full participant data including avatarIndex
 let lobbyRoomCode = '';
 let lobbyPlayerName = '';
 let lobbyIsHost = false;
@@ -480,11 +481,30 @@ function renderRoomCodeDisplay() {
   const isHost = lobbyIsHost === true && (!network || network.isHost === true);
   console.log('[RENDER] renderRoomCodeDisplay - isHost:', isHost, 'lobbyIsHost:', lobbyIsHost, 'network.isHost:', network?.isHost);
 
-  const playerChips = lobbyPlayers.map((p, i) => `
-    <div class="lobby-player-chip" style="border-color:${PLAYER_COLORS[i]}">
-      ${getAvatarHtml(PLAYER_AVATARS[i], 24)} ${escapeHtml(p == null ? '' : String(p))}
-    </div>
-  `).join('');
+  const localClientId = network?.clientId || null;
+  const playerChips = lobbyPlayers.map((p, i) => {
+    const participant = lobbyParticipants[i] || {};
+    const avatarIdx = Number.isInteger(participant.avatarIndex) ? participant.avatarIndex : i;
+    const avatar = avatarIdx >= 0 && avatarIdx < PLAYER_AVATARS.length ? PLAYER_AVATARS[avatarIdx] : PLAYER_AVATARS[i % PLAYER_AVATARS.length];
+    const isLocal = localClientId && participant.clientId === localClientId;
+    if (isLocal) {
+      return `
+        <div class="lobby-player-chip lobby-player-chip-local" style="border-color:${PLAYER_COLORS[i]}">
+          <div class="player-avatar-picker">
+            <button type="button" class="avatar-cycle-btn online-avatar-cycle" data-avatar-dir="-1" aria-label="Previous avatar">&lt;</button>
+            <span class="player-avatar-pick">${getAvatarHtml(avatar, 24)}</span>
+            <button type="button" class="avatar-cycle-btn online-avatar-cycle" data-avatar-dir="1" aria-label="Next avatar">&gt;</button>
+          </div>
+          ${escapeHtml(p == null ? '' : String(p))}
+        </div>
+      `;
+    }
+    return `
+      <div class="lobby-player-chip" style="border-color:${PLAYER_COLORS[i]}">
+        ${getAvatarHtml(avatar, 24)} ${escapeHtml(p == null ? '' : String(p))}
+      </div>
+    `;
+  }).join('');
 
   // CRITICAL: Only host gets the start button
   let actionArea = '';
@@ -682,13 +702,43 @@ function attachLobbyEvents() {
   });
 
   // Avatar picker controls (local game)
-  document.querySelectorAll('.avatar-cycle-btn').forEach(btn => {
+  document.querySelectorAll('.avatar-cycle-btn:not(.online-avatar-cycle)').forEach(btn => {
     btn.addEventListener('click', () => {
       const idx = parseInt(btn.dataset.avatarIndex, 10);
       const dir = parseInt(btn.dataset.avatarDir, 10);
       if (Number.isNaN(idx) || Number.isNaN(dir)) return;
       rotateLobbyAvatar(idx, dir);
       render();
+    });
+  });
+
+  // Avatar picker controls (online game lobby)
+  document.querySelectorAll('.online-avatar-cycle').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (!network) return;
+      const dir = parseInt(btn.dataset.avatarDir, 10);
+      if (Number.isNaN(dir)) return;
+      const localClientId = network.clientId;
+      const participant = lobbyParticipants.find(p => p.clientId === localClientId);
+      if (!participant) return;
+      const totalAvatars = PLAYER_AVATARS.length;
+      if (totalAvatars <= 0) return;
+      const current = Number.isInteger(participant.avatarIndex) ? participant.avatarIndex : 0;
+      // Find next available avatar not used by other players
+      const usedAvatars = new Set(
+        lobbyParticipants
+          .filter(p => p.clientId !== localClientId && Number.isInteger(p.avatarIndex))
+          .map(p => p.avatarIndex)
+      );
+      const step = dir >= 0 ? 1 : totalAvatars - 1;
+      let candidate = current;
+      for (let attempt = 0; attempt < totalAvatars; attempt++) {
+        candidate = (candidate + step) % totalAvatars;
+        if (!usedAvatars.has(candidate)) {
+          network.updateAvatar(candidate);
+          return;
+        }
+      }
     });
   });
 
@@ -831,6 +881,7 @@ function handleOnlineEvent(event, data, isCreator) {
     case 'room-created':
       console.log(tag, 'Room created with code:', data.code);
       lobbyRoomCode = data.code;
+      lobbyParticipants = data.participants || [];
       setChatRoomScope(lobbyRoomCode, true);
       render();
       break;
@@ -839,12 +890,14 @@ function handleOnlineEvent(event, data, isCreator) {
       if (!lobbyRoomCode && network) lobbyRoomCode = network.roomCode;
       setChatRoomScope(lobbyRoomCode, !data.rejoined);
       lobbyPlayers = data.players;
+      lobbyParticipants = data.participants || [];
       render();
       break;
     case 'player-joined':
     case 'player-left':
       console.log(tag, 'Player list updated:', data.players);
       lobbyPlayers = data.players;
+      lobbyParticipants = data.participants || [];
       render();
       break;
     case 'game-start':
@@ -2157,6 +2210,7 @@ function resetToLobby(errorMessage = '') {
   lobbyRoomCode = '';
   lobbyIsHost = false;
   lobbyPlayers = [];
+  lobbyParticipants = [];
   lobbyError = errorMessage;
   resetMonopolyTracking(false);
   setChatRoomScope(null);
