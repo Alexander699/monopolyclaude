@@ -186,8 +186,13 @@ function setupEngineCallbacks(room, roomCode) {
 function processGameAction(room, roomCode, senderId, data) {
   const engine = room.engine;
   if (!engine || engine.state.gameOver) return;
+  if (!senderId || !data || typeof data.actionType !== 'string') return;
 
-  const activePlayerId = engine.getCurrentPlayer().id;
+  const activePlayer = engine.getCurrentPlayer();
+  if (!activePlayer) return;
+  const activePlayerId = activePlayer.id;
+  const isValidSpaceId = (spaceId) =>
+    Number.isInteger(spaceId) && spaceId >= 0 && spaceId < engine.state.totalSpaces;
   const requiresActiveTurn = () => {
     if (senderId !== activePlayerId) {
       log(`Ignoring turn action ${data.actionType} from non-active player ${senderId} (active: ${activePlayerId})`);
@@ -195,77 +200,109 @@ function processGameAction(room, roomCode, senderId, data) {
     }
     return true;
   };
+  const requiresPhase = (expectedPhase) => engine.state.phase === expectedPhase;
 
-  switch (data.actionType) {
-    // --- Turn-based actions (only active player) ---
-    case 'roll-dice':
-      if (requiresActiveTurn() && engine.state.phase === 'pre-roll') {
-        engine.rollDiceAction();
-      }
-      break;
-    case 'pay-bail':
-      if (requiresActiveTurn()) {
-        engine.payBail(engine.getCurrentPlayer());
-      }
-      break;
-    case 'use-immunity':
-      if (requiresActiveTurn()) {
-        engine.useImmunityCard(engine.getCurrentPlayer());
-      }
-      break;
-    case 'buy-property':
-      if (requiresActiveTurn()) {
-        engine.buyProperty(activePlayerId);
-      }
-      break;
-    case 'decline-purchase':
-      if (requiresActiveTurn()) {
-        engine.declinePurchase();
-      }
-      break;
-    case 'end-turn':
-      if (requiresActiveTurn()) {
-        engine.endTurn();
-      }
-      break;
-    case 'influence-action':
-      if (data.action === 'embargo' && data.targetId) {
-        engine.useInfluenceAction(senderId, data.action, data.targetId);
-      } else {
+  try {
+    switch (data.actionType) {
+      // --- Turn-based actions (only active player) ---
+      case 'roll-dice':
+        if (requiresActiveTurn() && requiresPhase('pre-roll')) {
+          engine.rollDiceAction();
+        }
+        break;
+      case 'pay-bail':
+        if (requiresActiveTurn() && requiresPhase('pre-roll')) {
+          engine.payBail(engine.getCurrentPlayer());
+        }
+        break;
+      case 'use-immunity':
+        if (requiresActiveTurn() && requiresPhase('pre-roll')) {
+          engine.useImmunityCard(engine.getCurrentPlayer());
+        }
+        break;
+      case 'buy-property':
+        if (requiresActiveTurn() && requiresPhase('action')) {
+          engine.buyProperty(activePlayerId);
+        }
+        break;
+      case 'decline-purchase':
+        if (requiresActiveTurn() && requiresPhase('action')) {
+          engine.declinePurchase();
+        }
+        break;
+      case 'end-turn':
+        if (requiresActiveTurn() && requiresPhase('end-turn')) {
+          engine.endTurn();
+        }
+        break;
+      case 'influence-action': {
+        if (!requiresActiveTurn()) break;
+        if (!['embargo', 'summit', 'development_grant'].includes(data.action)) break;
+        if (data.action === 'embargo') {
+          if (typeof data.targetId !== 'string' || data.targetId === senderId) break;
+          const target = engine.getPlayerById(data.targetId);
+          if (!target || target.bankrupt) break;
+          engine.useInfluenceAction(senderId, data.action, data.targetId);
+          break;
+        }
         engine.useInfluenceAction(senderId, data.action);
+        break;
       }
-      break;
-    // --- Any-player actions (use sender ID) ---
-    case 'propose-trade':
-      engine.proposeTrade(senderId, data.partnerId, data.offer);
-      break;
-    case 'accept-trade':
-      engine.acceptTrade(data.tradeId, senderId);
-      break;
-    case 'reject-trade':
-      engine.rejectTrade(data.tradeId, senderId);
-      break;
-    case 'cancel-trade':
-      engine.cancelTrade(data.tradeId, senderId);
-      break;
-    case 'develop-property':
-      engine.developProperty(senderId, data.spaceId);
-      break;
-    case 'free-upgrade':
-      engine.freeUpgradeProperty(senderId, data.spaceId);
-      break;
-    case 'mortgage-property':
-      engine.mortgageProperty(senderId, data.spaceId);
-      break;
-    case 'unmortgage-property':
-      engine.unmortgageProperty(senderId, data.spaceId);
-      break;
-    case 'sell-development':
-      engine.sellDevelopment(senderId, data.spaceId);
-      break;
-    case 'sell-property':
-      engine.sellProperty(senderId, data.spaceId);
-      break;
+      // --- Any-player actions (use sender ID) ---
+      case 'propose-trade':
+        if (typeof data.partnerId === 'string' && data.partnerId) {
+          const offer = data.offer && typeof data.offer === 'object' ? data.offer : {};
+          engine.proposeTrade(senderId, data.partnerId, offer);
+        }
+        break;
+      case 'accept-trade':
+        if (typeof data.tradeId === 'string' && data.tradeId) {
+          engine.acceptTrade(data.tradeId, senderId);
+        }
+        break;
+      case 'reject-trade':
+        if (typeof data.tradeId === 'string' && data.tradeId) {
+          engine.rejectTrade(data.tradeId, senderId);
+        }
+        break;
+      case 'cancel-trade':
+        if (typeof data.tradeId === 'string' && data.tradeId) {
+          engine.cancelTrade(data.tradeId, senderId);
+        }
+        break;
+      case 'develop-property':
+        if (isValidSpaceId(data.spaceId)) {
+          engine.developProperty(senderId, data.spaceId);
+        }
+        break;
+      case 'free-upgrade':
+        if (isValidSpaceId(data.spaceId)) {
+          engine.freeUpgradeProperty(senderId, data.spaceId);
+        }
+        break;
+      case 'mortgage-property':
+        if (isValidSpaceId(data.spaceId)) {
+          engine.mortgageProperty(senderId, data.spaceId);
+        }
+        break;
+      case 'unmortgage-property':
+        if (isValidSpaceId(data.spaceId)) {
+          engine.unmortgageProperty(senderId, data.spaceId);
+        }
+        break;
+      case 'sell-development':
+        if (isValidSpaceId(data.spaceId)) {
+          engine.sellDevelopment(senderId, data.spaceId);
+        }
+        break;
+      case 'sell-property':
+        if (isValidSpaceId(data.spaceId)) {
+          engine.sellProperty(senderId, data.spaceId);
+        }
+        break;
+    }
+  } catch (error) {
+    log(`Error processing action ${data.actionType} in room ${roomCode}: ${error?.message || error}`);
   }
 }
 
@@ -599,7 +636,26 @@ io.on('connection', (socket) => {
     const sender = room.members.get(socket.data.clientId || '');
     if (!sender || sender.kicked) return;
 
-    socket.to(currentRoom).emit('chat', msg);
+    const rawText = typeof msg === 'string'
+      ? msg
+      : (msg && typeof msg === 'object' && typeof msg.text === 'string' ? msg.text : '');
+    const text = rawText.trim().slice(0, 200);
+    if (!text) return;
+
+    let color = '#ffffff';
+    if (room.engine && sender.playerId) {
+      const player = room.engine.getPlayerById(sender.playerId);
+      if (player?.color) color = player.color;
+    }
+
+    const payload = {
+      name: sender.name,
+      color,
+      text,
+      time: Date.now()
+    };
+
+    socket.to(currentRoom).emit('chat', payload);
   });
 
   // --- Disconnect ---

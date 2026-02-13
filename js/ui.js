@@ -161,15 +161,20 @@ function rotateLobbyAvatar(playerIndex, direction) {
 // Board is NxN grid (11x11 for classic, 13x13 for expanded). Spaces go clockwise:
 // Colorize player names in log messages
 function colorizeLogMessage(message, players) {
-  if (!players || players.length === 0) return message;
+  const safeMessage = escapeHtml(message == null ? '' : String(message));
+  if (!players || players.length === 0) return safeMessage;
   // Sort by name length descending so longer names match first (avoids partial matches)
-  const sorted = [...players].sort((a, b) => b.name.length - a.name.length);
-  let result = message;
+  const sorted = [...players].sort((a, b) => (b?.name?.length || 0) - (a?.name?.length || 0));
+  let result = safeMessage;
   for (const p of sorted) {
-    if (p.name && result.includes(p.name)) {
-      const escaped = p.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const playerName = typeof p?.name === 'string' ? p.name : '';
+    if (playerName) {
+      const safeName = escapeHtml(playerName);
+      if (!result.includes(safeName)) continue;
+      const escaped = escapeRegex(safeName);
+      const safeColor = sanitizeCssColor(p?.color, '#ffffff');
       result = result.replace(new RegExp(escaped, 'g'),
-        `<span style="color:${p.color};font-weight:700">${p.name}</span>`);
+        `<span style="color:${safeColor};font-weight:700">${safeName}</span>`);
     }
   }
   return result;
@@ -477,7 +482,7 @@ function renderRoomCodeDisplay() {
 
   const playerChips = lobbyPlayers.map((p, i) => `
     <div class="lobby-player-chip" style="border-color:${PLAYER_COLORS[i]}">
-      ${getAvatarHtml(PLAYER_AVATARS[i], 24)} ${p}
+      ${getAvatarHtml(PLAYER_AVATARS[i], 24)} ${escapeHtml(p == null ? '' : String(p))}
     </div>
   `).join('');
 
@@ -561,7 +566,7 @@ function renderLobby() {
                       <button type="button" class="avatar-cycle-btn" data-avatar-index="${i}" data-avatar-dir="1" aria-label="Next avatar">&gt;</button>
                     </div>
                     <input type="text" class="player-name-input" data-index="${i}"
-                           value="${name}" placeholder="Player ${i + 1}" maxlength="16" />
+                           value="${escapeAttr(name == null ? '' : String(name))}" placeholder="Player ${i + 1}" maxlength="16" />
                   </div>
                 `;
                 }).join('')}
@@ -583,7 +588,7 @@ function renderLobby() {
               <div class="online-section">
                 <h3>Host a Game</h3>
                 <input type="text" class="input-field host-name-input"
-                       placeholder="Your name" maxlength="16" value="${lobbyPlayerName}" />
+                       placeholder="Your name" maxlength="16" value="${escapeAttr(lobbyPlayerName)}" />
                 <button class="btn btn-success host-btn">
                   📡 Create Room
                 </button>
@@ -604,7 +609,7 @@ function renderLobby() {
 
               ${lobbyRoomCode ? renderRoomCodeDisplay() : ''}
 
-              ${lobbyError ? `<div class="lobby-error">${lobbyError}</div>` : ''}
+              ${lobbyError ? `<div class="lobby-error">${escapeHtml(lobbyError)}</div>` : ''}
             </div>
           </div>
         </div>
@@ -950,8 +955,8 @@ function renderGame() {
             <div class="chat-messages-mini" id="chat-messages-mini">
               ${chatMessages.map(msg => `
                 <div class="chat-msg">
-                  <span class="chat-name" style="color:${msg.color || '#fff'}">${msg.name}:</span>
-                  <span class="chat-text">${msg.text}</span>
+                  <span class="chat-name" style="color:${sanitizeCssColor(msg.color, '#fff')}">${escapeHtml(msg.name == null ? '' : String(msg.name))}:</span>
+                  <span class="chat-text">${escapeHtml(msg.text == null ? '' : String(msg.text))}</span>
                 </div>
               `).join('') || '<div class="no-messages">No messages yet</div>'}
             </div>
@@ -1032,7 +1037,7 @@ function renderPlayerCard(player, isCurrent) {
       <div class="player-card-header">
         <span class="player-avatar-small" style="background:${player.color}">${getAvatarHtml(player.avatar, 28)}</span>
         <div class="player-card-name">
-          <span class="player-name">${player.name}</span>
+          <span class="player-name">${escapeHtml(player.name)}</span>
           ${player.bankrupt ? '<span class="bankrupt-label">BANKRUPT</span>' : ''}
           ${player.inSanctions ? '<span class="sanctions-label">SANCTIONED</span>' : ''}
           ${player.connected === false && !player.bankrupt ? '<span class="offline-label">OFFLINE</span>' : ''}
@@ -1085,7 +1090,7 @@ function renderActiveEffectsPanel(state) {
         break;
       case 'embargo': {
         const target = engine?.getPlayerById(eff.targetId);
-        items.push(`<div class="effect-row"><span class="effect-icon">⛔</span> Embargo on ${target?.name || '?'} <span class="effect-duration">${label}</span></div>`);
+        items.push(`<div class="effect-row"><span class="effect-icon">⛔</span> Embargo on ${escapeHtml(target?.name || '?')} <span class="effect-duration">${label}</span></div>`);
         break;
       }
     }
@@ -1123,7 +1128,7 @@ function renderCenterActionButton() {
   const isMyTurn = !localPlayerId || currentPlayer.id === localPlayerId;
 
   if (!isMyTurn) {
-    return `<div class="center-action-btn"><div class="center-waiting">Waiting for ${currentPlayer.name}...</div></div>`;
+    return `<div class="center-action-btn"><div class="center-waiting">Waiting for ${escapeHtml(currentPlayer.name)}...</div></div>`;
   }
 
   let btnHtml = '';
@@ -1167,7 +1172,7 @@ function renderBoard() {
 
   // Current turn indicator in the center area
   html += `<div class="center-turn-indicator" style="border-color:${currentPlayer.color}">`;
-  html += `<span class="center-turn-main">${getAvatarHtml(currentPlayer.avatar, 22)} ${currentPlayer.name} is playing...</span>`;
+  html += `<span class="center-turn-main">${getAvatarHtml(currentPlayer.avatar, 22)} ${escapeHtml(currentPlayer.name)} is playing...</span>`;
   if (currentPlayer.inSanctions) {
     html += `<span class="sanctions-badge center-sanctions-badge">⛔ Sanctioned</span>`;
   }
@@ -1295,7 +1300,8 @@ function renderBoard() {
     if (playersHere.length > 0) {
       html += `<div class="player-tokens">`;
       playersHere.forEach(p => {
-        html += `<div class="player-token" data-player="${p.id}" style="background:${p.color};color:${p.color}" title="${p.name}">${getAvatarHtml(p.avatar, 28)}</div>`;
+        const safeColor = sanitizeCssColor(p.color, '#ffffff');
+        html += `<div class="player-token" data-player="${p.id}" style="background:${safeColor};color:${safeColor}" title="${escapeAttr(p.name)}">${getAvatarHtml(p.avatar, 28)}</div>`;
       });
       html += `</div>`;
     }
@@ -1378,7 +1384,7 @@ function renderActionPanel(currentPlayer, isMyTurn) {
 
   html += `
     <div class="current-space-info">
-      <h3>📍 ${currentPlayer.name} is on ${space.name}</h3>
+      <h3>📍 ${escapeHtml(currentPlayer.name)} is on ${escapeHtml(space.name)}</h3>
       ${showDetailedCard ? `
         <div class="space-detail-card" style="border-color:${ALLIANCES[space.alliance]?.color || '#ccc'}">
           <div class="sdc-header" style="background:${ALLIANCES[space.alliance]?.color || '#ccc'}">
@@ -1597,7 +1603,7 @@ function renderTradePanel() {
               ${otherPlayers.map(p => `
                 <button class="partner-chip ${selectedTradePartner === p.id ? 'selected' : ''}"
                         data-partner="${p.id}" style="border-color:${p.color}">
-                  ${getAvatarHtml(p.avatar, 20)} ${p.name}
+                  ${getAvatarHtml(p.avatar, 20)} ${escapeHtml(p.name)}
                 </button>
               `).join('')}
             </div>
@@ -1669,12 +1675,12 @@ function renderTradePanel() {
                 const canCancel = trade.fromId === currentPlayer.id;
                 return `
                   <div class="trade-offer-card">
-                    <div class="toc-header">${from.name} → ${to.name}</div>
+                    <div class="toc-header">${escapeHtml(from?.name || 'Player')} → ${escapeHtml(to?.name || 'Player')}</div>
                     <div class="toc-details">
                       ${trade.giveMoney ? `<span>Offers $${trade.giveMoney}</span>` : ''}
                       ${trade.getMoney ? `<span>Requests $${trade.getMoney}</span>` : ''}
-                      ${(trade.giveProperties || []).map(pid => `<span>Offers ${engine.getSpace(pid).name}</span>`).join('')}
-                      ${(trade.getProperties || []).map(pid => `<span>Wants ${engine.getSpace(pid).name}</span>`).join('')}
+                      ${(trade.giveProperties || []).map(pid => `<span>Offers ${escapeHtml(engine.getSpace(pid)?.name || 'Unknown')}</span>`).join('')}
+                      ${(trade.getProperties || []).map(pid => `<span>Wants ${escapeHtml(engine.getSpace(pid)?.name || 'Unknown')}</span>`).join('')}
                     </div>
                     ${canAccept ? `
                       <div class="toc-actions">
@@ -1714,7 +1720,7 @@ function renderLogPanel() {
             ${logs.map(l => `
               <div class="log-entry log-${l.type}">
                 <span class="log-turn">T${l.turn}</span>
-                <span class="log-msg">${l.message}</span>
+                <span class="log-msg">${colorizeLogMessage(l.message, engine.state.players)}</span>
               </div>
             `).join('')}
           </div>
@@ -1737,8 +1743,8 @@ function renderChatPanel() {
           <div class="chat-messages">
             ${chatMessages.map(m => `
               <div class="chat-msg">
-                <span class="chat-author" style="color:${m.color || '#fff'}">${m.name}:</span>
-                <span class="chat-text">${escapeHtml(m.text)}</span>
+                <span class="chat-author" style="color:${sanitizeCssColor(m.color, '#fff')}">${escapeHtml(m.name == null ? '' : String(m.name))}:</span>
+                <span class="chat-text">${escapeHtml(m.text == null ? '' : String(m.text))}</span>
               </div>
             `).join('')}
           </div>
@@ -1792,7 +1798,7 @@ function buildSpaceInfoBody(space) {
       ${space.rents[4] != null ? `<div class="sinfo-row"><span>${DEVELOPMENT_TIERS[4].icon} ${DEVELOPMENT_TIERS[4].name}:</span><span>$${space.rents[4]}</span></div>` : ''}
       <div class="sinfo-divider"></div>
       <div class="sinfo-row"><span>Development:</span><span>${DEVELOPMENT_TIERS[space.developmentLevel].icon || '—'} ${DEVELOPMENT_TIERS[space.developmentLevel].name}</span></div>
-      <div class="sinfo-row"><span>Owner:</span><span ${owner ? `style="color:${owner.color}"` : ''}>${owner ? owner.name : 'Unowned'}</span></div>
+      <div class="sinfo-row"><span>Owner:</span><span ${owner ? `style="color:${sanitizeCssColor(owner.color, '#fff')}"` : ''}>${owner ? escapeHtml(owner.name) : 'Unowned'}</span></div>
       ${space.mortgaged ? '<div class="sinfo-row"><span>Status:</span><span style="color:var(--danger)">Mortgaged</span></div>' : ''}
       ${alliance ? `<div class="sinfo-divider"></div><div class="sinfo-label">Alliance Bonus</div><div class="sinfo-bonus">${alliance.bonus}</div>` : ''}
     `;
@@ -1805,14 +1811,14 @@ function buildSpaceInfoBody(space) {
         <div class="sinfo-row"><span>${i+1} transport${i > 0 ? 's' : ''}:</span><span>$${r}</span></div>
       `).join('')}
       <div class="sinfo-divider"></div>
-      <div class="sinfo-row"><span>Owner:</span><span ${owner ? `style="color:${owner.color}"` : ''}>${owner ? owner.name : 'Unowned'}</span></div>
+      <div class="sinfo-row"><span>Owner:</span><span ${owner ? `style="color:${sanitizeCssColor(owner.color, '#fff')}"` : ''}>${owner ? escapeHtml(owner.name) : 'Unowned'}</span></div>
     `;
   } else if (space.type === 'infrastructure') {
     bodyHtml += `
       <div class="sinfo-row"><span>Price:</span><span>$${space.price}</span></div>
       <div class="sinfo-divider"></div>
       <div class="sinfo-row"><span>Rent:</span><span>5x / 10x dice roll</span></div>
-      <div class="sinfo-row"><span>Owner:</span><span ${owner ? `style="color:${owner.color}"` : ''}>${owner ? owner.name : 'Unowned'}</span></div>
+      <div class="sinfo-row"><span>Owner:</span><span ${owner ? `style="color:${sanitizeCssColor(owner.color, '#fff')}"` : ''}>${owner ? escapeHtml(owner.name) : 'Unowned'}</span></div>
     `;
   } else if (space.type === 'tax') {
     bodyHtml += `
@@ -1863,15 +1869,17 @@ function renderSpaceInfoInline() {
 function renderGameOverOverlay() {
   const winner = engine.getPlayerById(engine.state.winner);
   if (!winner) return '';
+  const rankedPlayers = [...engine.state.players]
+    .sort((a, b) => engine.calculateTotalWealth(b) - engine.calculateTotalWealth(a));
 
   return `
     <div class="modal-overlay gameover-overlay">
       <div class="gameover-content">
         <div class="gameover-crown">👑</div>
         <h1 class="gameover-title">VICTORY!</h1>
-        <div class="gameover-winner" style="color:${winner.color}">
+        <div class="gameover-winner" style="color:${sanitizeCssColor(winner.color, '#ffffff')}">
           <span class="winner-avatar">${getAvatarHtml(winner.avatar, 48)}</span>
-          <span class="winner-name">${winner.name}</span>
+          <span class="winner-name">${escapeHtml(winner.name)}</span>
         </div>
         <div class="gameover-stats">
           <div class="gos-row"><span>Total Wealth:</span><span>$${engine.calculateTotalWealth(winner).toLocaleString()}</span></div>
@@ -1881,13 +1889,12 @@ function renderGameOverOverlay() {
         </div>
         <div class="gameover-rankings">
           <h3>Final Rankings</h3>
-          ${engine.state.players
-            .sort((a, b) => engine.calculateTotalWealth(b) - engine.calculateTotalWealth(a))
+          ${rankedPlayers
             .map((p, i) => `
               <div class="ranking-row">
                 <span class="rank">#${i + 1}</span>
-                <span class="rank-avatar" style="background:${p.color}">${getAvatarHtml(p.avatar, 28)}</span>
-                <span class="rank-name">${p.name}</span>
+                <span class="rank-avatar" style="background:${sanitizeCssColor(p.color, '#ffffff')}">${getAvatarHtml(p.avatar, 28)}</span>
+                <span class="rank-name">${escapeHtml(p.name)}</span>
                 <span class="rank-wealth">$${engine.calculateTotalWealth(p).toLocaleString()}</span>
               </div>
             `).join('')}
@@ -2731,8 +2738,25 @@ function getFlagHtml(flagEmoji) {
 
 function escapeHtml(str) {
   const div = document.createElement('div');
-  div.textContent = str;
+  div.textContent = str == null ? '' : String(str);
   return div.innerHTML;
+}
+
+function escapeAttr(str) {
+  return escapeHtml(str).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function sanitizeCssColor(value, fallback = '#ffffff') {
+  if (typeof value !== 'string') return fallback;
+  const color = value.trim();
+  if (/^#[0-9a-fA-F]{3,8}$/.test(color)) return color;
+  if (/^rgba?\(\s*[\d.%\s,]+\s*\)$/.test(color)) return color;
+  if (/^[a-zA-Z]{3,20}$/.test(color)) return color;
+  return fallback;
 }
 
 // Export for use

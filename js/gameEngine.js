@@ -463,6 +463,9 @@ export class GameEngine {
   }
 
   payBail(player) {
+    if (!player) return false;
+    if (this.state.phase !== 'pre-roll') return false;
+    if (this.getCurrentPlayer().id !== player.id) return false;
     if (!player.inSanctions) return false;
 
     if (player.money >= SANCTIONS_BAIL) {
@@ -478,6 +481,9 @@ export class GameEngine {
   }
 
   useImmunityCard(player) {
+    if (!player) return false;
+    if (this.state.phase !== 'pre-roll') return false;
+    if (this.getCurrentPlayer().id !== player.id) return false;
     if (!player.inSanctions) return false;
     if (!player.hasGetOutFree) return false;
 
@@ -752,7 +758,12 @@ export class GameEngine {
 
   buyProperty(playerId) {
     const player = this.getPlayerById(playerId);
+    if (!player || player.bankrupt) return false;
+    if (this.getCurrentPlayer().id !== playerId) return false;
+    if (this.state.phase !== 'action') return false;
+
     const space = this.getSpace(player.position);
+    if (!space) return false;
 
     if (space.owner || !['country', 'transport', 'infrastructure'].includes(space.type)) return false;
     if (player.money < space.price) return false;
@@ -770,13 +781,16 @@ export class GameEngine {
   }
 
   declinePurchase() {
+    if (this.state.phase !== 'action') return false;
     this.state.phase = 'end-turn';
     this.emit();
+    return true;
   }
 
   developProperty(playerId, spaceId) {
     const player = this.getPlayerById(playerId);
     const space = this.getSpace(spaceId);
+    if (!player || !space || player.bankrupt) return false;
 
     if (space.type !== 'country' || space.owner !== playerId) return false;
     if (!this.hasCompleteAlliance(playerId, space.alliance)) return false;
@@ -801,6 +815,7 @@ export class GameEngine {
 
     const player = this.getPlayerById(playerId);
     const space = this.getSpace(spaceId);
+    if (!player || !space || player.bankrupt) return false;
 
     if (space.type !== 'country' || space.owner !== playerId) return false;
     if (!this.hasCompleteAlliance(playerId, space.alliance)) return false;
@@ -823,11 +838,12 @@ export class GameEngine {
 
   mortgageProperty(playerId, spaceId) {
     const space = this.getSpace(spaceId);
+    const player = this.getPlayerById(playerId);
+    if (!space || !player || player.bankrupt) return false;
     if (space.owner !== playerId || space.mortgaged || space.developmentLevel > 0) return false;
 
     space.mortgaged = true;
     const value = Math.floor(space.price * 0.5);
-    const player = this.getPlayerById(playerId);
     this.adjustMoney(player, value);
 
     this.log(`${player.name} mortgages ${space.name} for $${value}.`);
@@ -837,10 +853,11 @@ export class GameEngine {
 
   unmortgageProperty(playerId, spaceId) {
     const space = this.getSpace(spaceId);
+    const player = this.getPlayerById(playerId);
+    if (!space || !player || player.bankrupt) return false;
     if (space.owner !== playerId || !space.mortgaged) return false;
 
     const cost = Math.floor(space.price * 0.55);
-    const player = this.getPlayerById(playerId);
     if (player.money < cost) return false;
 
     this.adjustMoney(player, -cost);
@@ -853,11 +870,12 @@ export class GameEngine {
 
   sellDevelopment(playerId, spaceId) {
     const space = this.getSpace(spaceId);
+    const player = this.getPlayerById(playerId);
+    if (!space || !player || player.bankrupt) return false;
     if (space.owner !== playerId || space.developmentLevel <= 0) return false;
 
     const tier = DEVELOPMENT_TIERS[space.developmentLevel];
     const refund = Math.floor(space.price * tier.costMultiplier * 0.5);
-    const player = this.getPlayerById(playerId);
 
     space.developmentLevel--;
     this.adjustMoney(player, refund);
@@ -892,11 +910,12 @@ export class GameEngine {
 
   sellProperty(playerId, spaceId) {
     const space = this.getSpace(spaceId);
+    const player = this.getPlayerById(playerId);
     if (!space) return false;
+    if (!player || player.bankrupt) return false;
     if (!['country', 'transport', 'infrastructure'].includes(space.type)) return false;
     if (space.owner !== playerId) return false;
 
-    const player = this.getPlayerById(playerId);
     const payout = this.getPropertySaleValue(spaceId);
     if (payout <= 0) return false;
 
@@ -1023,18 +1042,21 @@ export class GameEngine {
 
   useInfluenceAction(playerId, action, targetId) {
     const player = this.getPlayerById(playerId);
+    if (!player || player.bankrupt) return false;
+    if (this.getCurrentPlayer().id !== playerId) return false;
 
     switch (action) {
       case 'embargo':
         // Cost: 200 influence. Target player's properties earn no rent for 1 round
         if (player.influence < 200) return false;
+        const target = this.getPlayerById(targetId);
+        if (!target || target.bankrupt || target.id === player.id) return false;
         player.influence -= 200;
         this.state.activeEffects.push({
           type: 'embargo',
           targetId,
           expiresRound: this.state.roundNumber + 1
         });
-        const target = this.getPlayerById(targetId);
         this.log(`${player.name} imposes a Trade Embargo on ${target.name}!`, 'influence');
         break;
 
@@ -1065,6 +1087,10 @@ export class GameEngine {
   // ---- Turn Management ----
 
   endTurn() {
+    if (this.state.phase !== 'end-turn') {
+      return false;
+    }
+
     const player = this.getCurrentPlayer();
 
     // Players in debt must liquidate assets before ending their turn.
