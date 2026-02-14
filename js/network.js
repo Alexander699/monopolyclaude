@@ -26,6 +26,9 @@ export class NetworkManager {
     this.localPlayerId = null;
     this.clientId = this.getOrCreateClientId();
     this.wasKicked = false;
+    this.hasConnectedOnce = false;
+    this.hasShownInitialConnectError = false;
+    this.lastConnectionStatusKey = null;
   }
 
   getOrCreateClientId() {
@@ -79,6 +82,18 @@ export class NetworkManager {
     console.log(`%c${prefix} ${msg}`, style);
   }
 
+  emitConnectionStatus(connected, message) {
+    if (!this.callback || this.wasKicked) return;
+    const statusKey = `${connected ? '1' : '0'}:${message || ''}`;
+    if (statusKey === this.lastConnectionStatusKey) return;
+    this.lastConnectionStatusKey = statusKey;
+    this.callback('connection-status', { connected: !!connected, message: message || '' });
+  }
+
+  isConnected() {
+    return !!(this.socket && this.socket.connected);
+  }
+
   connectSocket() {
     this.log(`Connecting to server: ${SERVER_URL}`);
     this.socket = io(SERVER_URL, {
@@ -86,14 +101,26 @@ export class NetworkManager {
     });
 
     this.socket.on('connect', () => {
+      const isReconnect = this.hasConnectedOnce;
+      this.hasConnectedOnce = true;
+      this.hasShownInitialConnectError = false;
       this.log(`Connected to server (id: ${this.socket.id})`);
+      if (isReconnect) {
+        this.emitConnectionStatus(true, 'Reconnected to game server.');
+      }
     });
 
     this.socket.on('connect_error', (err) => {
       this.log(`Connection error: ${err.message}`, 'error');
-      if (this.callback) {
-        this.callback('error', { message: 'Cannot connect to game server. Please try again.' });
+      if (!this.hasConnectedOnce) {
+        if (!this.hasShownInitialConnectError && this.callback) {
+          this.hasShownInitialConnectError = true;
+          this.callback('error', { message: 'Cannot connect to game server. Please try again.' });
+        }
+        return;
       }
+
+      this.emitConnectionStatus(false, 'Lost connection to server. Reconnecting...');
     });
 
     this.socket.on('error-msg', (data) => {
@@ -135,11 +162,9 @@ export class NetworkManager {
       callback('kicked', data);
     });
 
-    this.socket.on('disconnect', () => {
-      this.log('Disconnected from server', 'warn');
-      if (!this.wasKicked) {
-        callback('error', { message: 'Lost connection to server. Trying to reconnect...' });
-      }
+    this.socket.on('disconnect', (reason) => {
+      this.log(`Disconnected from server (${reason || 'unknown'})`, 'warn');
+      this.emitConnectionStatus(false, 'Lost connection to server. Reconnecting...');
     });
   }
 
@@ -186,6 +211,9 @@ export class NetworkManager {
     this.playerName = name;
     this.callback = callback;
     this.wasKicked = false;
+    this.hasConnectedOnce = false;
+    this.hasShownInitialConnectError = false;
+    this.lastConnectionStatusKey = null;
     this.players = [{ name, clientId: this.clientId, playerId: null, connected: true }];
 
     this.connectSocket();
@@ -226,6 +254,9 @@ export class NetworkManager {
     this.roomCode = code.toUpperCase().trim();
     this.callback = callback;
     this.wasKicked = false;
+    this.hasConnectedOnce = false;
+    this.hasShownInitialConnectError = false;
+    this.lastConnectionStatusKey = null;
 
     this.connectSocket();
 
@@ -262,8 +293,8 @@ export class NetworkManager {
   }
 
   sendAction(action) {
-    if (!this.socket) {
-      this.log('Cannot send action - not connected', 'error');
+    if (!this.socket || !this.socket.connected) {
+      this.log('Cannot send action - socket disconnected', 'warn');
       return;
     }
     action.fromPlayerId = this.localPlayerId;
@@ -272,7 +303,7 @@ export class NetworkManager {
   }
 
   sendChat(msg) {
-    if (!this.socket) return;
+    if (!this.socket || !this.socket.connected) return;
     this.socket.emit('chat', msg);
     // Socket.IO broadcast excludes sender, so add locally.
     if (this.callback) {
@@ -292,15 +323,18 @@ export class NetworkManager {
 
   destroy() {
     this.log('Destroying network manager');
+    this.callback = null;
     if (this.socket) {
       this.socket.disconnect();
       this.socket = null;
     }
     this.isHost = false;
-    this.callback = null;
     this.players = [];
     this.localPlayerId = null;
     this.roomCode = '';
     this.wasKicked = false;
+    this.hasConnectedOnce = false;
+    this.hasShownInitialConnectError = false;
+    this.lastConnectionStatusKey = null;
   }
 }

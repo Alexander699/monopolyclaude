@@ -948,6 +948,20 @@ function handleOnlineEvent(event, data, isCreator) {
     case 'kicked':
       resetToLobby(data.message || 'You were removed by the host.');
       break;
+    case 'connection-status':
+      if (appScreen === 'game') {
+        render();
+      } else {
+        if (data.connected) {
+          if (/^Lost connection to server\./.test(lobbyError)) {
+            lobbyError = '';
+          }
+        } else {
+          lobbyError = data.message || 'Lost connection to server. Reconnecting...';
+        }
+        render();
+      }
+      break;
     case 'error':
       if (appScreen === 'game') {
         resetToLobby(data.message || 'Connection lost.');
@@ -1179,6 +1193,11 @@ function renderCenterActionButton() {
   const state = engine.state;
   const currentPlayer = engine.getCurrentPlayer();
   const isMyTurn = !localPlayerId || currentPlayer.id === localPlayerId;
+  const isReconnecting = isOnlineGame() && network && typeof network.isConnected === 'function' && !network.isConnected();
+
+  if (isReconnecting) {
+    return '<div class="center-action-btn"><div class="center-waiting">Connection lost. Reconnecting...</div></div>';
+  }
 
   if (!isMyTurn) {
     return `<div class="center-action-btn"><div class="center-waiting">Waiting for ${escapeHtml(currentPlayer.name)}...</div></div>`;
@@ -1429,8 +1448,17 @@ function renderRegularSpace(space, side) {
 function renderActionPanel(currentPlayer, isMyTurn) {
   const state = engine.state;
   const space = engine.getSpace(currentPlayer.position);
+  const isReconnecting = isOnlineGame() && network && typeof network.isConnected === 'function' && !network.isConnected();
 
   let html = '<div class="action-content">';
+
+  if (isReconnecting) {
+    html += `
+      <div style="margin-bottom:10px;padding:8px 10px;border:1px solid #f59e0b;background:rgba(245,158,11,0.15);color:#fbbf24;border-radius:8px;font-size:12px;font-weight:700;">
+        Connection lost. Reconnecting...
+      </div>
+    `;
+  }
 
   // Current space info - only show detailed card to active player when they can buy
   const showDetailedCard = isMyTurn && space.type === 'country' && state.phase === 'action' && !space.owner;
@@ -2235,6 +2263,9 @@ function handleKickPlayer(playerId) {
 // Check if current player is allowed to take action (for online play)
 function canPerformAction() {
   if (!engine) return false;
+  if (isOnlineGame() && network && typeof network.isConnected === 'function' && !network.isConnected()) {
+    return false;
+  }
   const currentPlayer = engine.getCurrentPlayer();
   // In online mode, only the local player can act on their turn
   if (localPlayerId && currentPlayer.id !== localPlayerId) {
