@@ -48,7 +48,7 @@ export const ALLIANCES = {
     name: 'Arabian Peninsula',
     color: '#000000',
     lightColor: '#4d4d4d',
-    bonus: '$200 oil royalties/turn',
+    bonus: '$150 oil royalties/turn',
     resource: 'oil'
   },
   AMERICAS: {
@@ -64,7 +64,7 @@ export const ALLIANCES = {
     name: 'Egypt',
     color: '#9932CC',
     lightColor: '#b366d9',
-    bonus: '$150 tourism income/turn',
+    bonus: '$100 tourism income/turn',
     resource: 'tourism'
   },
   PACIFIC_ISLANDS: {
@@ -72,7 +72,7 @@ export const ALLIANCES = {
     name: 'New Zealand',
     color: '#00CED1',
     lightColor: '#40E0D0',
-    bonus: '$120 tourism boost/turn',
+    bonus: '$80 tourism boost/turn',
     resource: 'tourism'
   },
   NORDIC: {
@@ -106,51 +106,51 @@ export const DEVELOPMENT_TIERS = [
 export const BOARD = [
   // === BOTTOM ROW (positions 0-10) ===
   { id: 0, type: 'special', subtype: 'go', name: 'Global Summit', icon: '🌐' },
-  { id: 1, type: 'country', name: 'Gyumri', alliance: 'EASTERN', price: 400, flag: '🇦🇲', resource: 'agriculture', rents: [20, 40, 120, 360, 640, 900] },
+  { id: 1, type: 'country', name: 'Gyumri', alliance: 'EASTERN', price: 400, flag: '🇦🇲', resource: 'agriculture', rents: [30, 60, 170, 500, 900, 1250] },
   { id: 2, type: 'card', subtype: 'diplomaticCable', name: 'Diplomatic Cable', icon: '📜' },
-  { id: 3, type: 'country', name: 'Kapan', alliance: 'EASTERN', price: 500, flag: '🇦🇲', resource: 'tech', rents: [25, 50, 150, 450, 650, 900], featured: true },
-  { id: 4, type: 'tax', name: 'Import Tariff', amount: 200, icon: '💰' },
-  { id: 5, type: 'transport', name: 'Maritime Routes', price: 1500, icon: '🚢', rents: [200, 400, 800, 1600] },
-  { id: 6, type: 'country', name: 'Yerevan', alliance: 'EASTERN', price: 700, flag: '🇦🇲', resource: 'agriculture', rents: [35, 70, 200, 550, 750, 1000] },
-  { id: 7, type: 'country', name: 'Alexandria', alliance: 'AFRICAN_RISING', price: 700, flag: '🇪🇬', resource: 'oil', rents: [35, 70, 200, 550, 750, 1000] },
-  { id: 8, type: 'country', name: 'Giza', alliance: 'AFRICAN_RISING', price: 700, flag: '🇪🇬', resource: 'tourism', rents: [35, 70, 200, 550, 750, 1000] },
-  { id: 9, type: 'country', name: 'Cairo', alliance: 'AFRICAN_RISING', price: 900, flag: '🇪🇬', resource: 'tourism', rents: [45, 90, 270, 700, 900, 1200] },
+  { id: 3, type: 'country', name: 'Kapan', alliance: 'EASTERN', price: 500, flag: '🇦🇲', resource: 'tech', rents: [35, 70, 210, 630, 900, 1250], featured: true },
+  { id: 4, type: 'tax', name: 'Import Tariff', amount: 500, icon: '💰' },
+  { id: 5, type: 'transport', name: 'Maritime Routes', price: 1500, icon: '🚢', rents: [250, 500, 1000, 2000] },
+  { id: 6, type: 'country', name: 'Yerevan', alliance: 'EASTERN', price: 700, flag: '🇦🇲', resource: 'agriculture', rents: [50, 100, 280, 770, 1050, 1400] },
+  { id: 7, type: 'country', name: 'Alexandria', alliance: 'AFRICAN_RISING', price: 700, flag: '🇪🇬', resource: 'oil', rents: [50, 100, 280, 770, 1050, 1400] },
+  { id: 8, type: 'country', name: 'Giza', alliance: 'AFRICAN_RISING', price: 700, flag: '🇪🇬', resource: 'tourism', rents: [50, 100, 280, 770, 1050, 1400] },
+  { id: 9, type: 'country', name: 'Cairo', alliance: 'AFRICAN_RISING', price: 900, flag: '🇪🇬', resource: 'tourism', rents: [65, 130, 380, 980, 1250, 1650] },
   { id: 10, type: 'special', subtype: 'sanctions', name: 'Trade Sanctions', icon: '⛔' },
 
   // === LEFT COLUMN (positions 11-20) ===
-  { id: 11, type: 'country', name: 'Mumbai', alliance: 'SOUTH_ASIAN', price: 1000, flag: '🇮🇳', resource: 'agriculture', rents: [50, 100, 300, 750, 1000, 1350] },
+  { id: 11, type: 'country', name: 'Mumbai', alliance: 'SOUTH_ASIAN', price: 1000, flag: '🇮🇳', resource: 'agriculture', rents: [70, 140, 420, 1050, 1400, 1900] },
   { id: 12, type: 'infrastructure', name: 'Internet Backbone', price: 1000, icon: '🌐' },
-  { id: 13, type: 'country', name: 'Bengaluru', alliance: 'SOUTH_ASIAN', price: 1000, flag: '🇮🇳', resource: 'tech', rents: [50, 100, 300, 750, 1000, 1350] },
-  { id: 14, type: 'country', name: 'Delhi', alliance: 'SOUTH_ASIAN', price: 1200, flag: '🇮🇳', resource: 'agriculture', rents: [60, 120, 360, 900, 1100, 1450] },
-  { id: 15, type: 'transport', name: 'Rail Networks', price: 1500, icon: '🚂', rents: [200, 400, 800, 1600] },
-  { id: 16, type: 'country', name: 'Salvador', alliance: 'BRICS', price: 1300, flag: '🇧🇷', resource: 'tourism', rents: [65, 130, 390, 950, 1150, 1500] },
+  { id: 13, type: 'country', name: 'Bengaluru', alliance: 'SOUTH_ASIAN', price: 1000, flag: '🇮🇳', resource: 'tech', rents: [70, 140, 420, 1050, 1400, 1900] },
+  { id: 14, type: 'country', name: 'Delhi', alliance: 'SOUTH_ASIAN', price: 1200, flag: '🇮🇳', resource: 'agriculture', rents: [85, 170, 500, 1250, 1550, 2050] },
+  { id: 15, type: 'transport', name: 'Rail Networks', price: 1500, icon: '🚂', rents: [250, 500, 1000, 2000] },
+  { id: 16, type: 'country', name: 'Salvador', alliance: 'BRICS', price: 1300, flag: '🇧🇷', resource: 'tourism', rents: [90, 180, 550, 1330, 1600, 2100] },
   { id: 17, type: 'card', subtype: 'diplomaticCable', name: 'Diplomatic Cable', icon: '📜' },
-  { id: 18, type: 'country', name: 'Rio', alliance: 'BRICS', price: 1500, flag: '🇧🇷', resource: 'tech', rents: [75, 150, 450, 1050, 1300, 1700] },
-  { id: 19, type: 'country', name: 'Sao Paulo', alliance: 'BRICS', price: 1600, flag: '🇧🇷', resource: 'agriculture', rents: [80, 160, 480, 1100, 1350, 1750] },
+  { id: 18, type: 'country', name: 'Rio', alliance: 'BRICS', price: 1500, flag: '🇧🇷', resource: 'tech', rents: [105, 210, 630, 1470, 1800, 2400] },
+  { id: 19, type: 'country', name: 'Sao Paulo', alliance: 'BRICS', price: 1600, flag: '🇧🇷', resource: 'agriculture', rents: [110, 220, 670, 1550, 1900, 2450] },
   { id: 20, type: 'special', subtype: 'freetrade', name: 'Free Trade Zone', icon: '🆓' },
 
   // === TOP ROW (positions 21-30) ===
-  { id: 21, type: 'country', name: 'Paris', alliance: 'EU', price: 1600, flag: '🇫🇷', resource: 'tourism', rents: [80, 160, 480, 1100, 1350, 1750] },
+  { id: 21, type: 'country', name: 'Paris', alliance: 'EU', price: 1600, flag: '🇫🇷', resource: 'tourism', rents: [110, 220, 670, 1550, 1900, 2450] },
   { id: 22, type: 'card', subtype: 'globalNews', name: 'Global News', icon: '📰' },
-  { id: 23, type: 'country', name: 'Toulouse', alliance: 'EU', price: 1800, flag: '🇫🇷', resource: 'tech', rents: [85, 170, 510, 1150, 1450, 1900] },
-  { id: 24, type: 'country', name: 'Lyon', alliance: 'EU', price: 1900, flag: '🇫🇷', resource: 'tech', rents: [95, 190, 570, 1300, 1600, 2100] },
-  { id: 25, type: 'transport', name: 'Air Routes', price: 1500, icon: '✈️', rents: [200, 400, 800, 1600] },
-  { id: 26, type: 'country', name: 'Tel Aviv', alliance: 'ASIAN_TIGERS', price: 1900, flag: '🇮🇱', resource: 'tech', rents: [95, 190, 570, 1300, 1600, 2100] },
-  { id: 27, type: 'country', name: 'Haifa', alliance: 'ASIAN_TIGERS', price: 2100, flag: '🇮🇱', resource: 'tech', rents: [105, 210, 630, 1400, 1700, 2300] },
+  { id: 23, type: 'country', name: 'Toulouse', alliance: 'EU', price: 1800, flag: '🇫🇷', resource: 'tech', rents: [120, 240, 720, 1600, 2000, 2650] },
+  { id: 24, type: 'country', name: 'Lyon', alliance: 'EU', price: 1900, flag: '🇫🇷', resource: 'tech', rents: [130, 260, 800, 1800, 2200, 2900] },
+  { id: 25, type: 'transport', name: 'Air Routes', price: 1500, icon: '✈️', rents: [250, 500, 1000, 2000] },
+  { id: 26, type: 'country', name: 'Tel Aviv', alliance: 'ASIAN_TIGERS', price: 1900, flag: '🇮🇱', resource: 'tech', rents: [130, 260, 800, 1800, 2200, 2900] },
+  { id: 27, type: 'country', name: 'Haifa', alliance: 'ASIAN_TIGERS', price: 2100, flag: '🇮🇱', resource: 'tech', rents: [145, 290, 880, 1950, 2350, 3200] },
   { id: 28, type: 'infrastructure', name: 'Shipping Lanes', price: 1000, icon: '⚓' },
-  { id: 29, type: 'country', name: 'Jerusalem', alliance: 'ASIAN_TIGERS', price: 2200, flag: '🇮🇱', resource: 'tech', rents: [110, 220, 660, 1500, 1900, 2500] },
+  { id: 29, type: 'country', name: 'Jerusalem', alliance: 'ASIAN_TIGERS', price: 2200, flag: '🇮🇱', resource: 'tech', rents: [150, 300, 920, 2100, 2650, 3500] },
   { id: 30, type: 'special', subtype: 'incident', name: 'International Incident', icon: '🚨' },
 
   // === RIGHT COLUMN (positions 31-39) ===
-  { id: 31, type: 'country', name: 'Dubai', alliance: 'OIL_NATIONS', price: 2400, flag: '🇦🇪', resource: 'oil', rents: [120, 240, 720, 1700, 2100, 2700] },
-  { id: 32, type: 'country', name: 'Riyadh', alliance: 'OIL_NATIONS', price: 2200, flag: '🇸🇦', resource: 'oil', rents: [110, 220, 660, 1500, 1900, 2500] },
+  { id: 31, type: 'country', name: 'Dubai', alliance: 'OIL_NATIONS', price: 2400, flag: '🇦🇪', resource: 'oil', rents: [165, 330, 1000, 2350, 2900, 3750] },
+  { id: 32, type: 'country', name: 'Riyadh', alliance: 'OIL_NATIONS', price: 2200, flag: '🇸🇦', resource: 'oil', rents: [150, 300, 920, 2100, 2650, 3500] },
   { id: 33, type: 'card', subtype: 'diplomaticCable', name: 'Diplomatic Cable', icon: '📜' },
-  { id: 34, type: 'country', name: 'Abu Dhabi', alliance: 'OIL_NATIONS', price: 2500, flag: '🇦🇪', resource: 'oil', rents: [125, 250, 750, 1800, 2300, 2900] },
-  { id: 35, type: 'transport', name: 'Digital Networks', price: 1500, icon: '📡', rents: [200, 400, 800, 1600] },
+  { id: 34, type: 'country', name: 'Abu Dhabi', alliance: 'OIL_NATIONS', price: 2500, flag: '🇦🇪', resource: 'oil', rents: [175, 350, 1050, 2500, 3200, 4050] },
+  { id: 35, type: 'transport', name: 'Digital Networks', price: 1500, icon: '📡', rents: [250, 500, 1000, 2000] },
   { id: 36, type: 'card', subtype: 'globalNews', name: 'Global News', icon: '📰' },
-  { id: 37, type: 'country', name: 'New York', alliance: 'AMERICAS', price: 2700, flag: '🇺🇸', resource: 'agriculture', rents: [130, 260, 780, 1850, 2350, 2900] },
-  { id: 38, type: 'tax', name: 'Luxury Tax', amount: 750, icon: '💎' },
-  { id: 39, type: 'country', name: 'San Francisco', alliance: 'AMERICAS', price: 3000, flag: '🇺🇸', resource: 'tech', rents: [150, 300, 900, 2000, 2500, 3200] }
+  { id: 37, type: 'country', name: 'New York', alliance: 'AMERICAS', price: 2700, flag: '🇺🇸', resource: 'agriculture', rents: [180, 360, 1100, 2600, 3300, 4100] },
+  { id: 38, type: 'tax', name: 'Luxury Tax', amount: 1200, icon: '💎' },
+  { id: 39, type: 'country', name: 'San Francisco', alliance: 'AMERICAS', price: 3000, flag: '🇺🇸', resource: 'tech', rents: [200, 400, 1250, 2800, 3500, 4500] }
 ];
 
 // Expanded Board Layout - 48 spaces (13x13 grid)
@@ -158,59 +158,59 @@ export const BOARD = [
 export const BOARD_EXPANDED = [
   // === BOTTOM ROW (positions 0-12) ===
   { id: 0, type: 'special', subtype: 'go', name: 'Global Summit', icon: '🌐' },
-  { id: 1, type: 'country', name: 'Gyumri', alliance: 'EASTERN', price: 400, flag: '🇦🇲', resource: 'agriculture', rents: [20, 40, 120, 360, 640, 900] },
+  { id: 1, type: 'country', name: 'Gyumri', alliance: 'EASTERN', price: 400, flag: '🇦🇲', resource: 'agriculture', rents: [30, 60, 170, 500, 900, 1250] },
   { id: 2, type: 'card', subtype: 'diplomaticCable', name: 'Diplomatic Cable', icon: '📜' },
-  { id: 3, type: 'country', name: 'Kapan', alliance: 'EASTERN', price: 500, flag: '🇦🇲', resource: 'tech', rents: [25, 50, 150, 450, 650, 900], featured: true },
-  { id: 4, type: 'tax', name: 'Import Tariff', amount: 200, icon: '💰' },
-  { id: 5, type: 'transport', name: 'Maritime Routes', price: 1500, icon: '🚢', rents: [200, 400, 800, 1600] },
-  { id: 6, type: 'country', name: 'Yerevan', alliance: 'EASTERN', price: 700, flag: '🇦🇲', resource: 'agriculture', rents: [35, 70, 200, 550, 750, 1000] },
-  { id: 7, type: 'country', name: 'Alexandria', alliance: 'AFRICAN_RISING', price: 700, flag: '🇪🇬', resource: 'oil', rents: [35, 70, 200, 550, 750, 1000] },
+  { id: 3, type: 'country', name: 'Kapan', alliance: 'EASTERN', price: 500, flag: '🇦🇲', resource: 'tech', rents: [35, 70, 210, 630, 900, 1250], featured: true },
+  { id: 4, type: 'tax', name: 'Import Tariff', amount: 500, icon: '💰' },
+  { id: 5, type: 'transport', name: 'Maritime Routes', price: 1500, icon: '🚢', rents: [250, 500, 1000, 2000] },
+  { id: 6, type: 'country', name: 'Yerevan', alliance: 'EASTERN', price: 700, flag: '🇦🇲', resource: 'agriculture', rents: [50, 100, 280, 770, 1050, 1400] },
+  { id: 7, type: 'country', name: 'Alexandria', alliance: 'AFRICAN_RISING', price: 700, flag: '🇪🇬', resource: 'oil', rents: [50, 100, 280, 770, 1050, 1400] },
   { id: 8, type: 'card', subtype: 'globalNews', name: 'Global News', icon: '📰' },
-  { id: 9, type: 'country', name: 'Giza', alliance: 'AFRICAN_RISING', price: 700, flag: '🇪🇬', resource: 'tourism', rents: [35, 70, 200, 550, 750, 1000] },
-  { id: 10, type: 'country', name: 'Cairo', alliance: 'AFRICAN_RISING', price: 900, flag: '🇪🇬', resource: 'tourism', rents: [45, 90, 270, 700, 900, 1200] },
+  { id: 9, type: 'country', name: 'Giza', alliance: 'AFRICAN_RISING', price: 700, flag: '🇪🇬', resource: 'tourism', rents: [50, 100, 280, 770, 1050, 1400] },
+  { id: 10, type: 'country', name: 'Cairo', alliance: 'AFRICAN_RISING', price: 900, flag: '🇪🇬', resource: 'tourism', rents: [65, 130, 380, 980, 1250, 1650] },
   { id: 11, type: 'card', subtype: 'globalNews', name: 'Global News', icon: '📰' },
   { id: 12, type: 'special', subtype: 'sanctions', name: 'Trade Sanctions', icon: '⛔' },
 
   // === LEFT COLUMN (positions 13-24) ===
-  { id: 13, type: 'country', name: 'Mumbai', alliance: 'SOUTH_ASIAN', price: 1000, flag: '🇮🇳', resource: 'agriculture', rents: [50, 100, 300, 750, 1000, 1350] },
+  { id: 13, type: 'country', name: 'Mumbai', alliance: 'SOUTH_ASIAN', price: 1000, flag: '🇮🇳', resource: 'agriculture', rents: [70, 140, 420, 1050, 1400, 1900] },
   { id: 14, type: 'infrastructure', name: 'Internet Backbone', price: 1000, icon: '🌐' },
-  { id: 15, type: 'country', name: 'Bengaluru', alliance: 'SOUTH_ASIAN', price: 1000, flag: '🇮🇳', resource: 'tech', rents: [50, 100, 300, 750, 1000, 1350] },
-  { id: 16, type: 'country', name: 'Delhi', alliance: 'SOUTH_ASIAN', price: 1200, flag: '🇮🇳', resource: 'agriculture', rents: [60, 120, 360, 900, 1100, 1450] },
-  { id: 17, type: 'transport', name: 'Rail Networks', price: 1500, icon: '🚂', rents: [200, 400, 800, 1600] },
-  { id: 18, type: 'country', name: 'Salvador', alliance: 'BRICS', price: 1300, flag: '🇧🇷', resource: 'tourism', rents: [65, 130, 390, 950, 1150, 1500] },
+  { id: 15, type: 'country', name: 'Bengaluru', alliance: 'SOUTH_ASIAN', price: 1000, flag: '🇮🇳', resource: 'tech', rents: [70, 140, 420, 1050, 1400, 1900] },
+  { id: 16, type: 'country', name: 'Delhi', alliance: 'SOUTH_ASIAN', price: 1200, flag: '🇮🇳', resource: 'agriculture', rents: [85, 170, 500, 1250, 1550, 2050] },
+  { id: 17, type: 'transport', name: 'Rail Networks', price: 1500, icon: '🚂', rents: [250, 500, 1000, 2000] },
+  { id: 18, type: 'country', name: 'Salvador', alliance: 'BRICS', price: 1300, flag: '🇧🇷', resource: 'tourism', rents: [90, 180, 550, 1330, 1600, 2100] },
   { id: 19, type: 'card', subtype: 'diplomaticCable', name: 'Diplomatic Cable', icon: '📜' },
-  { id: 20, type: 'country', name: 'Rio', alliance: 'BRICS', price: 1500, flag: '🇧🇷', resource: 'tech', rents: [75, 150, 450, 1050, 1300, 1700] },
-  { id: 21, type: 'country', name: 'Sao Paulo', alliance: 'BRICS', price: 1600, flag: '🇧🇷', resource: 'agriculture', rents: [80, 160, 480, 1100, 1350, 1750] },
-  { id: 22, type: 'country', name: 'Stockholm', alliance: 'NORDIC', price: 1300, flag: '🇸🇪', resource: 'oil', rents: [65, 130, 390, 950, 1150, 1500] },
-  { id: 23, type: 'country', name: 'Gothenburg', alliance: 'NORDIC', price: 1300, flag: '🇸🇪', resource: 'tech', rents: [65, 130, 390, 950, 1150, 1500] },
+  { id: 20, type: 'country', name: 'Rio', alliance: 'BRICS', price: 1500, flag: '🇧🇷', resource: 'tech', rents: [105, 210, 630, 1470, 1800, 2400] },
+  { id: 21, type: 'country', name: 'Sao Paulo', alliance: 'BRICS', price: 1600, flag: '🇧🇷', resource: 'agriculture', rents: [110, 220, 670, 1550, 1900, 2450] },
+  { id: 22, type: 'country', name: 'Stockholm', alliance: 'NORDIC', price: 1300, flag: '🇸🇪', resource: 'oil', rents: [90, 180, 550, 1330, 1600, 2100] },
+  { id: 23, type: 'country', name: 'Gothenburg', alliance: 'NORDIC', price: 1300, flag: '🇸🇪', resource: 'tech', rents: [90, 180, 550, 1330, 1600, 2100] },
   { id: 24, type: 'special', subtype: 'freetrade', name: 'Free Trade Zone', icon: '🆓' },
 
   // === TOP ROW (positions 25-36) ===
-  { id: 25, type: 'country', name: 'Malmo', alliance: 'NORDIC', price: 1600, flag: '🇸🇪', resource: 'tech', rents: [80, 160, 480, 1100, 1350, 1750] },
-  { id: 26, type: 'country', name: 'Paris', alliance: 'EU', price: 1600, flag: '🇫🇷', resource: 'tourism', rents: [80, 160, 480, 1100, 1350, 1750] },
+  { id: 25, type: 'country', name: 'Malmo', alliance: 'NORDIC', price: 1600, flag: '🇸🇪', resource: 'tech', rents: [110, 220, 670, 1550, 1900, 2450] },
+  { id: 26, type: 'country', name: 'Paris', alliance: 'EU', price: 1600, flag: '🇫🇷', resource: 'tourism', rents: [110, 220, 670, 1550, 1900, 2450] },
   { id: 27, type: 'card', subtype: 'globalNews', name: 'Global News', icon: '📰' },
-  { id: 28, type: 'country', name: 'Toulouse', alliance: 'EU', price: 1800, flag: '🇫🇷', resource: 'tech', rents: [85, 170, 510, 1150, 1450, 1900] },
-  { id: 29, type: 'transport', name: 'Air Routes', price: 1500, icon: '✈️', rents: [200, 400, 800, 1600] },
-  { id: 30, type: 'country', name: 'Lyon', alliance: 'EU', price: 1900, flag: '🇫🇷', resource: 'tech', rents: [95, 190, 570, 1300, 1600, 2100] },
-  { id: 31, type: 'country', name: 'Tel Aviv', alliance: 'ASIAN_TIGERS', price: 1900, flag: '🇮🇱', resource: 'tech', rents: [95, 190, 570, 1300, 1600, 2100] },
-  { id: 32, type: 'country', name: 'Haifa', alliance: 'ASIAN_TIGERS', price: 2100, flag: '🇮🇱', resource: 'tech', rents: [105, 210, 630, 1400, 1700, 2300] },
+  { id: 28, type: 'country', name: 'Toulouse', alliance: 'EU', price: 1800, flag: '🇫🇷', resource: 'tech', rents: [120, 240, 720, 1600, 2000, 2650] },
+  { id: 29, type: 'transport', name: 'Air Routes', price: 1500, icon: '✈️', rents: [250, 500, 1000, 2000] },
+  { id: 30, type: 'country', name: 'Lyon', alliance: 'EU', price: 1900, flag: '🇫🇷', resource: 'tech', rents: [130, 260, 800, 1800, 2200, 2900] },
+  { id: 31, type: 'country', name: 'Tel Aviv', alliance: 'ASIAN_TIGERS', price: 1900, flag: '🇮🇱', resource: 'tech', rents: [130, 260, 800, 1800, 2200, 2900] },
+  { id: 32, type: 'country', name: 'Haifa', alliance: 'ASIAN_TIGERS', price: 2100, flag: '🇮🇱', resource: 'tech', rents: [145, 290, 880, 1950, 2350, 3200] },
   { id: 33, type: 'infrastructure', name: 'Shipping Lanes', price: 1000, icon: '⚓' },
-  { id: 34, type: 'country', name: 'Jerusalem', alliance: 'ASIAN_TIGERS', price: 2200, flag: '🇮🇱', resource: 'tech', rents: [110, 220, 660, 1500, 1900, 2500] },
-  { id: 35, type: 'country', name: 'Auckland', alliance: 'PACIFIC_ISLANDS', price: 1200, flag: '🇳🇿', resource: 'tourism', rents: [60, 120, 360, 900, 1100, 1450] },
+  { id: 34, type: 'country', name: 'Jerusalem', alliance: 'ASIAN_TIGERS', price: 2200, flag: '🇮🇱', resource: 'tech', rents: [150, 300, 920, 2100, 2650, 3500] },
+  { id: 35, type: 'country', name: 'Auckland', alliance: 'PACIFIC_ISLANDS', price: 1200, flag: '🇳🇿', resource: 'tourism', rents: [85, 170, 500, 1250, 1550, 2050] },
   { id: 36, type: 'special', subtype: 'incident', name: 'International Incident', icon: '🚨' },
 
   // === RIGHT COLUMN (positions 37-47) ===
-  { id: 37, type: 'country', name: 'Wellington', alliance: 'PACIFIC_ISLANDS', price: 1200, flag: '🇳🇿', resource: 'agriculture', rents: [60, 120, 360, 900, 1100, 1450] },
-  { id: 38, type: 'country', name: 'Queenstown', alliance: 'PACIFIC_ISLANDS', price: 1800, flag: '🇳🇿', resource: 'tourism', rents: [85, 170, 510, 1150, 1450, 1900] },
+  { id: 37, type: 'country', name: 'Wellington', alliance: 'PACIFIC_ISLANDS', price: 1200, flag: '🇳🇿', resource: 'agriculture', rents: [85, 170, 500, 1250, 1550, 2050] },
+  { id: 38, type: 'country', name: 'Queenstown', alliance: 'PACIFIC_ISLANDS', price: 1800, flag: '🇳🇿', resource: 'tourism', rents: [120, 240, 720, 1600, 2000, 2650] },
   { id: 39, type: 'card', subtype: 'diplomaticCable', name: 'Diplomatic Cable', icon: '📜' },
-  { id: 40, type: 'country', name: 'Dubai', alliance: 'OIL_NATIONS', price: 2400, flag: '🇦🇪', resource: 'oil', rents: [120, 240, 720, 1700, 2100, 2700] },
-  { id: 41, type: 'transport', name: 'Digital Networks', price: 1500, icon: '📡', rents: [200, 400, 800, 1600] },
-  { id: 42, type: 'country', name: 'Abu Dhabi', alliance: 'OIL_NATIONS', price: 2500, flag: '🇦🇪', resource: 'oil', rents: [125, 250, 750, 1800, 2300, 2900] },
-  { id: 43, type: 'country', name: 'Riyadh', alliance: 'OIL_NATIONS', price: 2200, flag: '🇸🇦', resource: 'oil', rents: [110, 220, 660, 1500, 1900, 2500] },
-  { id: 44, type: 'country', name: 'Chicago', alliance: 'AMERICAS', price: 2400, flag: '🇺🇸', resource: 'oil', rents: [120, 240, 720, 1700, 2100, 2700] },
-  { id: 45, type: 'country', name: 'New York', alliance: 'AMERICAS', price: 2700, flag: '🇺🇸', resource: 'agriculture', rents: [130, 260, 780, 1850, 2350, 2900] },
-  { id: 46, type: 'tax', name: 'Luxury Tax', amount: 750, icon: '💎' },
-  { id: 47, type: 'country', name: 'San Francisco', alliance: 'AMERICAS', price: 3000, flag: '🇺🇸', resource: 'tech', rents: [150, 300, 900, 2000, 2500, 3200] }
+  { id: 40, type: 'country', name: 'Dubai', alliance: 'OIL_NATIONS', price: 2400, flag: '🇦🇪', resource: 'oil', rents: [165, 330, 1000, 2350, 2900, 3750] },
+  { id: 41, type: 'transport', name: 'Digital Networks', price: 1500, icon: '📡', rents: [250, 500, 1000, 2000] },
+  { id: 42, type: 'country', name: 'Abu Dhabi', alliance: 'OIL_NATIONS', price: 2500, flag: '🇦🇪', resource: 'oil', rents: [175, 350, 1050, 2500, 3200, 4050] },
+  { id: 43, type: 'country', name: 'Riyadh', alliance: 'OIL_NATIONS', price: 2200, flag: '🇸🇦', resource: 'oil', rents: [150, 300, 920, 2100, 2650, 3500] },
+  { id: 44, type: 'country', name: 'Chicago', alliance: 'AMERICAS', price: 2400, flag: '🇺🇸', resource: 'oil', rents: [165, 330, 1000, 2350, 2900, 3750] },
+  { id: 45, type: 'country', name: 'New York', alliance: 'AMERICAS', price: 2700, flag: '🇺🇸', resource: 'agriculture', rents: [180, 360, 1100, 2600, 3300, 4100] },
+  { id: 46, type: 'tax', name: 'Luxury Tax', amount: 1200, icon: '💎' },
+  { id: 47, type: 'country', name: 'San Francisco', alliance: 'AMERICAS', price: 3000, flag: '🇺🇸', resource: 'tech', rents: [200, 400, 1250, 2800, 3500, 4500] }
 ];
 
 // Map Registry
@@ -302,9 +302,9 @@ export const PLAYER_AVATARS = [
   { emoji: '🏆', img: 'https://api.dicebear.com/9.x/bottts-neutral/svg?seed=player8' },
 ];
 
-export const STARTING_MONEY = 15000;
-export const GO_SALARY = 2000;
-export const SANCTIONS_BAIL = 500;
+export const STARTING_MONEY = 10000;
+export const GO_SALARY = 1500;
+export const SANCTIONS_BAIL = 700;
 export const INFLUENCE_TO_WIN = 3000;
 export const MAX_PLAYERS = 8;
 export const MIN_PLAYERS = 2;

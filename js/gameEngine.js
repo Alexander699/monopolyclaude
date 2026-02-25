@@ -80,7 +80,9 @@ export function createGameState(playerNames, mapId = 'classic', avatarIndices = 
       ...space,
       owner: null,
       developmentLevel: 0,
-      mortgaged: false
+      mortgaged: false,
+      // Tracks whether each built level was paid or free (for fair resale rules).
+      developmentHistory: []
     })),
     globalNewsDeck,
     diplomaticDeck,
@@ -261,6 +263,43 @@ export class GameEngine {
     }
 
     return cost;
+  }
+
+  normalizeTradeMoney(value) {
+    const amount = Number(value ?? 0);
+    if (!Number.isFinite(amount) || amount < 0) return null;
+    const normalized = Math.floor(amount);
+    if (!Number.isSafeInteger(normalized)) return null;
+    return normalized;
+  }
+
+  sanitizeTradePropertyList(value) {
+    if (!Array.isArray(value)) return [];
+    const unique = new Set();
+    for (const rawId of value) {
+      const spaceId = Number(rawId);
+      if (!Number.isInteger(spaceId)) continue;
+      if (spaceId < 0 || spaceId >= this.state.totalSpaces) continue;
+      unique.add(spaceId);
+    }
+    return Array.from(unique);
+  }
+
+  ensureDevelopmentHistory(space) {
+    if (!space || space.type !== 'country') return [];
+    if (!Array.isArray(space.developmentHistory)) {
+      space.developmentHistory = [];
+    }
+
+    // Backward compatibility for existing saves/states.
+    while (space.developmentHistory.length < space.developmentLevel) {
+      space.developmentHistory.push('paid');
+    }
+    if (space.developmentHistory.length > space.developmentLevel) {
+      space.developmentHistory = space.developmentHistory.slice(0, space.developmentLevel);
+    }
+
+    return space.developmentHistory;
   }
 
   // ---- Actions ----
@@ -799,7 +838,9 @@ export class GameEngine {
     if (cost === Infinity || player.money < cost) return false;
 
     this.adjustMoney(player, -cost);
-    space.developmentLevel++;
+    const history = this.ensureDevelopmentHistory(space);
+    history.push('paid');
+    space.developmentLevel = history.length;
     player.developmentCount++;
     player.influence += 1 * space.developmentLevel;
 
@@ -824,7 +865,9 @@ export class GameEngine {
     if (cost === Infinity) return false;
 
     // Free upgrade - no charge
-    space.developmentLevel++;
+    const history = this.ensureDevelopmentHistory(space);
+    history.push('free');
+    space.developmentLevel = history.length;
     player.developmentCount++;
     player.influence += 1 * space.developmentLevel;
 
@@ -874,13 +917,25 @@ export class GameEngine {
     if (!space || !player || player.bankrupt) return false;
     if (space.owner !== playerId || space.developmentLevel <= 0) return false;
 
-    const tier = DEVELOPMENT_TIERS[space.developmentLevel];
-    const refund = Math.floor(space.price * tier.costMultiplier * 0.5);
+    const history = this.ensureDevelopmentHistory(space);
+    const soldLevel = space.developmentLevel;
+    const source = history.pop() || 'paid';
+    const tier = DEVELOPMENT_TIERS[soldLevel];
+    const refund = source === 'paid'
+      ? Math.floor(space.price * tier.costMultiplier * 0.5)
+      : 0;
 
-    space.developmentLevel--;
-    this.adjustMoney(player, refund);
+    space.developmentLevel = history.length;
+    player.developmentCount = Math.max(0, player.developmentCount - 1);
+    if (refund > 0) {
+      this.adjustMoney(player, refund);
+    }
 
-    this.log(`${player.name} sells development on ${space.name} for $${refund}.`);
+    if (refund > 0) {
+      this.log(`${player.name} sells development on ${space.name} for $${refund}.`);
+    } else {
+      this.log(`${player.name} removes free development on ${space.name} (no cash refund).`);
+    }
     this.emit();
     return true;
   }
@@ -894,10 +949,12 @@ export class GameEngine {
     const baseMultiplier = space.mortgaged ? 0.25 : 0.5;
     let payout = Math.floor(space.price * baseMultiplier);
 
-    // Full liquidation returns a smaller fraction of development spend.
+    // Full liquidation returns a smaller fraction of PAID development spend only.
     if (space.type === 'country' && space.developmentLevel > 0) {
+      const history = this.ensureDevelopmentHistory(space);
       let developmentRecovery = 0;
-      for (let level = 1; level <= space.developmentLevel; level++) {
+      for (let level = 1; level <= history.length; level++) {
+        if (history[level - 1] !== 'paid') continue;
         const tier = DEVELOPMENT_TIERS[level];
         const buildCost = Math.floor(space.price * tier.costMultiplier);
         developmentRecovery += Math.floor(buildCost * 0.50);
@@ -922,6 +979,7 @@ export class GameEngine {
     this.adjustMoney(player, payout);
     space.owner = null;
     space.developmentLevel = 0;
+    space.developmentHistory = [];
     space.mortgaged = false;
     player.properties = player.properties.filter(pid => pid !== spaceId);
 
@@ -939,11 +997,30 @@ export class GameEngine {
     const to = this.getPlayerById(toId);
     if (!from || !to || fromId === toId || from.bankrupt || to.bankrupt) return false;
 
+    const giveMoney = this.normalizeTradeMoney(offer?.giveMoney);
+    const getMoney = this.normalizeTradeMoney(offer?.getMoney);
+    if (giveMoney === null || getMoney === null) return false;
+
+    const giveProperties = this.sanitizeTradePropertyList(offer?.giveProperties);
+    const getProperties = this.sanitizeTradePropertyList(offer?.getProperties);
+    const overlap = giveProperties.some(spaceId => getProperties.includes(spaceId));
+    if (overlap) return false;
+
+    const hasValue =
+      giveMoney > 0 ||
+      getMoney > 0 ||
+      giveProperties.length > 0 ||
+      getProperties.length > 0;
+    if (!hasValue) return false;
+
     const trade = {
       id: generateId(),
       fromId,
       toId,
-      ...offer,
+      giveMoney,
+      getMoney,
+      giveProperties,
+      getProperties,
       status: 'pending'
     };
     this.state.tradeOffers.push(trade);
@@ -964,9 +1041,19 @@ export class GameEngine {
     if (!from || !to || from.bankrupt || to.bankrupt) return false;
 
     // Validate
-    if (from.money < (trade.giveMoney || 0) || to.money < (trade.getMoney || 0)) return false;
-    const giveProperties = Array.isArray(trade.giveProperties) ? trade.giveProperties : [];
-    const getProperties = Array.isArray(trade.getProperties) ? trade.getProperties : [];
+    const giveMoney = this.normalizeTradeMoney(trade.giveMoney);
+    const getMoney = this.normalizeTradeMoney(trade.getMoney);
+    if (giveMoney === null || getMoney === null) return false;
+    if (from.money < giveMoney || to.money < getMoney) return false;
+
+    const giveProperties = this.sanitizeTradePropertyList(trade.giveProperties);
+    const getProperties = this.sanitizeTradePropertyList(trade.getProperties);
+    const hasValue =
+      giveMoney > 0 ||
+      getMoney > 0 ||
+      giveProperties.length > 0 ||
+      getProperties.length > 0;
+    if (!hasValue) return false;
 
     // Reject malformed trades that reference the same property in both directions
     const overlap = giveProperties.some(spaceId => getProperties.includes(spaceId));
@@ -983,13 +1070,13 @@ export class GameEngine {
     }
 
     // Execute trade
-    if (trade.giveMoney) {
-      this.adjustMoney(from, -trade.giveMoney);
-      this.adjustMoney(to, trade.giveMoney);
+    if (giveMoney > 0) {
+      this.adjustMoney(from, -giveMoney);
+      this.adjustMoney(to, giveMoney);
     }
-    if (trade.getMoney) {
-      this.adjustMoney(to, -trade.getMoney);
-      this.adjustMoney(from, trade.getMoney);
+    if (getMoney > 0) {
+      this.adjustMoney(to, -getMoney);
+      this.adjustMoney(from, getMoney);
     }
 
     giveProperties.forEach(spaceId => {
@@ -1148,28 +1235,28 @@ export class GameEngine {
 
       // Alliance bonuses per round
       this.getActivePlayers().forEach(player => {
-        // Oil Nations: $200/turn if complete
+        // Oil Nations: $150/turn if complete
         if (this.hasCompleteAlliance(player.id, 'OIL_NATIONS')) {
-          this.adjustMoney(player, 200);
-          this.log(`${player.name} collects $200 from Oil Royalties!`, 'success');
+          this.adjustMoney(player, 150);
+          this.log(`${player.name} collects $150 from Oil Royalties!`, 'success');
         }
         // Eastern Partnership: 12 influence/turn
         if (this.hasCompleteAlliance(player.id, 'EASTERN')) {
           player.influence += 12;
         }
-        // African Rising: $150/turn
+        // African Rising: $100/turn
         if (this.hasCompleteAlliance(player.id, 'AFRICAN_RISING')) {
-          this.adjustMoney(player, 150);
-          this.log(`${player.name} collects $150 from Tourism Income!`, 'success');
+          this.adjustMoney(player, 100);
+          this.log(`${player.name} collects $100 from Tourism Income!`, 'success');
         }
         // Americas: free upgrade handled via flag
         if (this.hasCompleteAlliance(player.id, 'AMERICAS')) {
           this.state.pendingFreeUpgrade = player.id;
         }
-        // Pacific Islands: $120/turn tourism boost
+        // Pacific Islands: $80/turn tourism boost
         if (this.hasCompleteAlliance(player.id, 'PACIFIC_ISLANDS')) {
-          this.adjustMoney(player, 120);
-          this.log(`${player.name} collects $120 from Pacific Tourism Boost!`, 'success');
+          this.adjustMoney(player, 80);
+          this.log(`${player.name} collects $80 from Pacific Tourism Boost!`, 'success');
         }
         // Nordic Council: +20 influence/turn
         if (this.hasCompleteAlliance(player.id, 'NORDIC')) {
@@ -1201,10 +1288,30 @@ export class GameEngine {
   }
 
   adjustMoney(player, amount) {
-    player.money += amount;
+    if (!player) return false;
+
+    const current = Number(player.money);
+    const delta = Number(amount);
+    if (!Number.isFinite(current) || !Number.isInteger(current)) {
+      this.log(`Blocked invalid balance state for ${player.name}.`, 'warning');
+      return false;
+    }
+    if (!Number.isFinite(delta) || !Number.isInteger(delta)) {
+      this.log(`Blocked invalid money adjustment for ${player.name}.`, 'warning');
+      return false;
+    }
+
+    const next = current + delta;
+    if (!Number.isSafeInteger(next)) {
+      this.log(`Blocked unsafe money adjustment for ${player.name}.`, 'warning');
+      return false;
+    }
+
+    player.money = next;
     if (!player.bankrupt && player.money < 0) {
       this.checkBankruptcy(player);
     }
+    return true;
   }
 
   checkBankruptcy(player) {
@@ -1222,6 +1329,7 @@ export class GameEngine {
       const space = this.getSpace(pid);
       space.owner = null;
       space.developmentLevel = 0;
+      space.developmentHistory = [];
       space.mortgaged = false;
     });
     player.properties = [];

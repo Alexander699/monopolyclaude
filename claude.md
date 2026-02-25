@@ -155,14 +155,14 @@ Must complete an alliance before developing (building) on any of its countries.
 | Alliance (ID) | Display Name | Countries (Classic) | Countries (Expanded) | Completion Bonus |
 |----------|-----------|-----------|-----------|------------------|
 | EASTERN | Armenia | Gyumri, Kapan, Yerevan | Same | +12 influence/turn |
-| AFRICAN_RISING | Egypt | Alexandria, Giza, Cairo | Same | $150 tourism income/turn |
+| AFRICAN_RISING | Egypt | Alexandria, Giza, Cairo | Same | $100 tourism income/turn |
 | SOUTH_ASIAN | India | Mumbai, Bengaluru, Delhi | Same | +$200 on all rent collected |
 | BRICS | Brazil | Salvador, Rio, Sao Paulo | Same | Extra influence from rent collected |
 | EU | France | Paris, Toulouse, Lyon | Same | Double rent on developed properties |
 | ASIAN_TIGERS | Israel | Tel Aviv, Haifa, Jerusalem | Same | Tech Hub costs -50% |
-| OIL_NATIONS | Arabian Peninsula | Dubai, Riyadh, Abu Dhabi | Same | $200 oil royalties/turn |
+| OIL_NATIONS | Arabian Peninsula | Dubai, Riyadh, Abu Dhabi | Same | $150 oil royalties/turn |
 | AMERICAS | United States | New York, San Francisco | + Chicago | Free development upgrade/round |
-| PACIFIC_ISLANDS | New Zealand | — | Auckland, Wellington, Queenstown | $120 tourism boost/turn |
+| PACIFIC_ISLANDS | New Zealand | — | Auckland, Wellington, Queenstown | $80 tourism boost/turn |
 | NORDIC | Sweden | — | Stockholm, Gothenburg, Malmo | +20 influence/turn |
 
 **Note:** New Zealand and Sweden alliances only appear on the expanded "World Domination" map. United States gains Chicago on the expanded map.
@@ -184,9 +184,9 @@ Countries produce: oil, tech, agriculture, tourism
 - **Trade System**: Propose trades to other players; recipients see glowing notification badge
 
 ### Key Constants (in gameData.js)
-- Starting Money: $15,000
-- GO Salary: $2,000 + bonuses
-- Sanctions Bail: $500
+- Starting Money: $10,000
+- GO Salary: $1,500 + bonuses
+- Sanctions Bail: $700
 - Influence to Win: 3,000
 
 ## UI Features
@@ -237,6 +237,24 @@ Player avatars are defined in `js/gameData.js` in the `PLAYER_AVATARS` array. Ea
 
 ## Recent Changes (Latest First)
 
+### v1.9.2 - Economy Rebalance (Faster Games)
+- **Starting money reduced:** $15,000 → $10,000 — tighter early game, harder buy decisions.
+- **GO salary reduced:** $2,000 → $1,500 — less free cash each lap.
+- **Sanctions bail increased:** $500 → $700 — more punishment for getting stuck.
+- **Taxes significantly raised:** Import Tariff $200 → $500, Luxury Tax $750 → $1,200 on both maps — stronger money drains.
+- **All country rents increased ~35-40%:** base rents and all development tier rents raised across every country on both classic and expanded maps. Cheap properties (Gyumri $20 → $30, Kapan $25 → $35) through expensive ones (San Francisco $150 → $200) all scale proportionally. Higher rents mean bigger swings and faster knockouts.
+- **Transport rents increased:** all four transports raised from [200, 400, 800, 1600] to [250, 500, 1000, 2000].
+- **Alliance passive income reduced:** Oil Nations $200 → $150/round, Egypt tourism $150 → $100/round, Pacific Islands $120 → $80/round — less free money injected into the economy each round.
+
+### v1.9.1 - Economy Exploit Hardening
+- **Trade payload sanitization:** added strict sanitizers in `gameEngine.js` for trade money and property lists. `normalizeTradeMoney()` only accepts safe, finite, non-negative integers; `sanitizeTradePropertyList()` only keeps valid board IDs and removes duplicates.
+- **Trade identity hardening:** `proposeTrade()` no longer spreads raw client `offer` into the trade object. Canonical server-side `fromId` and `toId` are always preserved, blocking identity override exploits.
+- **Trade validation tightening:** empty/no-op trades are rejected, malformed overlapping property trades are rejected, and acceptance re-validates sanitized values before executing transfers.
+- **Money arithmetic safety:** `adjustMoney()` now rejects non-integer, non-finite, or unsafe money adjustments to prevent string/NaN/Infinity coercion paths.
+- **Free-upgrade cash loop fix:** country spaces now track development source (`paid` vs `free`) via `developmentHistory`. Selling/removing development only refunds paid levels; free levels return `$0`.
+- **Liquidation parity fix:** `getPropertySaleValue()` now counts recovery only for paid development levels, so free upgrades cannot inflate liquidation value.
+- **State cleanup consistency:** `developmentHistory` is cleared when properties are liquidated or players go bankrupt.
+
 ### v1.9 - Server-Authoritative Architecture (Current)
 - **Server runs all game logic:** the Node.js server now creates and runs the `GameEngine` directly — no player's browser runs game logic in online mode.
 - **All players are equal clients:** no host/client distinction during gameplay. Any player can disconnect without breaking the game.
@@ -261,7 +279,7 @@ Player avatars are defined in `js/gameData.js` in the `PLAYER_AVATARS` array. Ea
 
 ### v1.7 - Economy Rebalance, Liquidation & Bankruptcy Pressure
 - **Softer economy tuning:** `STARTING_MONEY` $15,000, `GO_SALARY` $2,000, `SANCTIONS_BAIL` $500, `INFLUENCE_TO_WIN` 3,000 for better early-game buy capacity without runaway influence wins.
-- **Tax pressure reduced from the prior rebalance:** Import Tariff is now $200 and Luxury Tax is $750 on classic and expanded boards.
+- **Tax pressure reduced from the prior rebalance:** Import Tariff was $200 and Luxury Tax was $750 (later raised in v1.9.2).
 - **Influence pacing reduced:** lower influence from passing GO, property purchases, development, rent collection, and alliance passive gains; this makes influence victories much less common.
 - **Debt is now real:** payments can drive money below zero; players must liquidate assets to recover, and cannot end their turn while insolvent.
 - **No round upkeep costs:** maintenance drain was removed after playtests showed early-game purchasing became too constrained.
