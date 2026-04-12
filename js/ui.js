@@ -210,6 +210,118 @@ function getSpacePosition(id) {
   }
 }
 
+const STICKY_SCROLL_BOTTOM_THRESHOLD = 24;
+
+function isTextEntryElement(el) {
+  if (!el) return false;
+  const tag = el.tagName;
+  if (tag === 'TEXTAREA') return true;
+  if (tag !== 'INPUT') return false;
+  const type = String(el.type || 'text').toLowerCase();
+  return !['button', 'checkbox', 'color', 'file', 'hidden', 'image', 'radio', 'range', 'reset', 'submit'].includes(type);
+}
+
+function clampScrollOffset(value, max) {
+  if (!Number.isFinite(value)) return 0;
+  if (!Number.isFinite(max) || max <= 0) return 0;
+  return Math.max(0, Math.min(value, max));
+}
+
+function syncEphemeralUiStateBeforeRender() {
+  const chatEl = document.getElementById('chat-input-mini');
+  if (chatEl) chatInputDraft = chatEl.value;
+
+  const tradeGiveEl = document.getElementById('trade-give-money');
+  if (tradeGiveEl) {
+    tradeOffer.giveMoney = Math.max(0, parseInt(tradeGiveEl.value, 10) || 0);
+  }
+
+  const tradeGetEl = document.getElementById('trade-get-money');
+  if (tradeGetEl) {
+    tradeOffer.getMoney = Math.max(0, parseInt(tradeGetEl.value, 10) || 0);
+  }
+}
+
+function captureRenderSnapshot() {
+  syncEphemeralUiStateBeforeRender();
+
+  const scrollPositions = {};
+  document.querySelectorAll('[data-preserve-scroll]').forEach(el => {
+    const key = el.dataset.preserveScroll;
+    if (!key) return;
+    const snapshot = {
+      top: el.scrollTop,
+      left: el.scrollLeft
+    };
+    if (key === 'inline-chat-messages' || key === 'modal-chat-messages') {
+      snapshot.stickToBottom = (el.scrollHeight - el.clientHeight - el.scrollTop) <= STICKY_SCROLL_BOTTOM_THRESHOLD;
+    }
+    scrollPositions[key] = snapshot;
+  });
+
+  const activeEl = document.activeElement;
+  let focusedInput = null;
+  if (isTextEntryElement(activeEl) && activeEl.id) {
+    let selectionStart = null;
+    let selectionEnd = null;
+    try {
+      selectionStart = Number.isFinite(activeEl.selectionStart) ? activeEl.selectionStart : null;
+      selectionEnd = Number.isFinite(activeEl.selectionEnd) ? activeEl.selectionEnd : null;
+    } catch (e) {}
+    focusedInput = {
+      id: activeEl.id,
+      selectionStart,
+      selectionEnd
+    };
+  }
+
+  return { scrollPositions, focusedInput };
+}
+
+function restoreRenderSnapshot(snapshot) {
+  if (!snapshot) return;
+
+  document.querySelectorAll('[data-preserve-scroll]').forEach(el => {
+    const key = el.dataset.preserveScroll;
+    if (!key) return;
+    const saved = snapshot.scrollPositions?.[key];
+    if (!saved) return;
+
+    const maxScrollTop = el.scrollHeight - el.clientHeight;
+    const maxScrollLeft = el.scrollWidth - el.clientWidth;
+
+    if (saved.stickToBottom) {
+      el.scrollTop = Math.max(0, maxScrollTop);
+    } else {
+      el.scrollTop = clampScrollOffset(saved.top, maxScrollTop);
+    }
+    el.scrollLeft = clampScrollOffset(saved.left, maxScrollLeft);
+  });
+
+  const focusState = snapshot.focusedInput;
+  if (!focusState?.id) return;
+  const nextEl = document.getElementById(focusState.id);
+  if (!isTextEntryElement(nextEl)) return;
+
+  try {
+    nextEl.focus({ preventScroll: true });
+  } catch (e) {
+    nextEl.focus();
+  }
+
+  if (typeof nextEl.setSelectionRange === 'function' && focusState.selectionStart !== null) {
+    const valueLength = String(nextEl.value || '').length;
+    const start = clampScrollOffset(focusState.selectionStart, valueLength);
+    const end = clampScrollOffset(
+      focusState.selectionEnd !== null ? focusState.selectionEnd : focusState.selectionStart,
+      valueLength
+    );
+    try {
+      nextEl.setSelectionRange(start, end);
+    } catch (e) {}
+  }
+}
+
 // ---- Render Functions ----
 
 export function initApp() {
@@ -424,10 +536,7 @@ function render() {
     return;
   }
 
-  // Preserve chat input state before re-render
-  const chatEl = document.getElementById('chat-input-mini');
-  const chatWasFocused = chatEl && document.activeElement === chatEl;
-  if (chatEl) chatInputDraft = chatEl.value;
+  const renderSnapshot = captureRenderSnapshot();
 
   // Safety check: if we're not in an active animation, ensure animation flags are cleared
   if (!diceAnimationInProgress) {
@@ -461,14 +570,7 @@ function render() {
       break;
   }
 
-  // Post-render: auto-scroll chat and restore focus if chat was focused before
-  const chatMsgs = document.getElementById('chat-messages-mini');
-  if (chatMsgs) chatMsgs.scrollTop = chatMsgs.scrollHeight;
-  const chatInput2 = document.getElementById('chat-input-mini');
-  if (chatInput2 && chatWasFocused) {
-    chatInput2.focus();
-    chatInput2.setSelectionRange(chatInputDraft.length, chatInputDraft.length);
-  }
+  restoreRenderSnapshot(renderSnapshot);
 }
 
 // ============================================================
@@ -989,7 +1091,7 @@ function renderGame() {
       <div class="game-layout">
         <!-- Player Panel (Left) -->
         <div class="player-panel">
-          <div class="player-panel-list">
+          <div class="player-panel-list" data-preserve-scroll="player-panel-list">
             ${state.players.map(p => renderPlayerCard(p, currentPlayer.id === p.id)).join('')}
           </div>
           ${renderActiveEffectsPanel(state)}
@@ -1012,14 +1114,14 @@ function renderGame() {
         <!-- Right Side Panel -->
         <div class="right-panel">
           <!-- Action Panel -->
-          <div class="action-panel">
+          <div class="action-panel" data-preserve-scroll="action-panel">
             ${renderActionPanel(currentPlayer, isMyTurn)}
           </div>
 
           <!-- Chat Panel (Always Visible) -->
           <div class="chat-panel-inline">
             <h4>💬 Chat</h4>
-            <div class="chat-messages-mini" id="chat-messages-mini">
+            <div class="chat-messages-mini" id="chat-messages-mini" data-preserve-scroll="inline-chat-messages">
               ${chatMessages.map(msg => `
                 <div class="chat-msg">
                   <span class="chat-name" style="color:${sanitizeCssColor(msg.color, '#fff')}">${escapeHtml(msg.name == null ? '' : String(msg.name))}:</span>
@@ -1279,7 +1381,7 @@ function renderBoard() {
     if (recentLogs.length > 0) {
       html += `<div class="center-mini-log">`;
       html += `<div class="center-mini-log-header">Recent Activity</div>`;
-      html += `<div class="center-mini-log-scroll">`;
+      html += `<div class="center-mini-log-scroll" data-preserve-scroll="center-mini-log">`;
       html += recentLogs.map(l => `<div class="center-log-entry log-${l.type}">${colorizeLogMessage(l.message, state.players)}</div>`).join('');
       html += `</div></div>`;
     }
@@ -1587,7 +1689,7 @@ function renderPropertyPanel() {
           <h2>🏢 Property Management</h2>
           <button class="modal-close" id="close-props">&times;</button>
         </div>
-        <div class="modal-body">
+        <div class="modal-body" data-preserve-scroll="property-modal-body">
           <div class="property-tabs">
             <button class="prop-tab active" data-tab="mine">My Properties</button>
             <button class="prop-tab" data-tab="all">All Properties</button>
@@ -1676,7 +1778,7 @@ function renderTradePanel() {
           <h2>🤝 Trade Negotiation</h2>
           <button class="modal-close" id="close-trade">&times;</button>
         </div>
-        <div class="modal-body">
+        <div class="modal-body" data-preserve-scroll="trade-modal-body">
           <!-- Select partner -->
           <div class="trade-partner-select">
             <label>Trade with:</label>
@@ -1702,7 +1804,7 @@ function renderTradePanel() {
                     <input type="number" class="trade-money-input" id="trade-give-money"
                            value="${tradeOffer.giveMoney}" min="0" max="${currentPlayer.money}" step="100" />
                   </div>
-                  <div class="trade-props-list">
+                  <div class="trade-props-list" data-preserve-scroll="trade-give-props">
                     ${currentPlayer.properties.map(pid => {
                       const s = engine.getSpace(pid);
                       const checked = tradeOffer.giveProperties.includes(pid);
@@ -1725,7 +1827,7 @@ function renderTradePanel() {
                     <input type="number" class="trade-money-input" id="trade-get-money"
                            value="${tradeOffer.getMoney}" min="0" max="${partner.money}" step="100" />
                   </div>
-                  <div class="trade-props-list">
+                  <div class="trade-props-list" data-preserve-scroll="trade-get-props">
                     ${partner.properties.map(pid => {
                       const s = engine.getSpace(pid);
                       const checked = tradeOffer.getProperties.includes(pid);
@@ -1797,7 +1899,7 @@ function renderLogPanel() {
           <button class="modal-close" id="close-log">&times;</button>
         </div>
         <div class="modal-body">
-          <div class="log-entries">
+          <div class="log-entries" data-preserve-scroll="full-log-entries">
             ${logs.map(l => `
               <div class="log-entry log-${l.type}">
                 <span class="log-turn">T${l.turn}</span>
@@ -1821,7 +1923,7 @@ function renderChatPanel() {
           <button class="modal-close" id="close-chat">&times;</button>
         </div>
         <div class="modal-body">
-          <div class="chat-messages">
+          <div class="chat-messages" data-preserve-scroll="modal-chat-messages">
             ${chatMessages.map(m => `
               <div class="chat-msg">
                 <span class="chat-author" style="color:${sanitizeCssColor(m.color, '#fff')}">${escapeHtml(m.name == null ? '' : String(m.name))}:</span>
@@ -1939,7 +2041,7 @@ function renderSpaceInfoInline() {
         <span class="sinfo-name">${space.name}</span>
         <button class="sinfo-close" id="close-space-info">&times;</button>
       </div>
-      <div class="sinfo-body">
+      <div class="sinfo-body" data-preserve-scroll="center-space-info-body">
         ${buildSpaceInfoBody(space)}
       </div>
     </div>
@@ -2114,10 +2216,10 @@ function attachGameEvents() {
   });
 
   // Trade money inputs
-  document.getElementById('trade-give-money')?.addEventListener('change', (e) => {
+  document.getElementById('trade-give-money')?.addEventListener('input', (e) => {
     tradeOffer.giveMoney = parseInt(e.target.value) || 0;
   });
-  document.getElementById('trade-get-money')?.addEventListener('change', (e) => {
+  document.getElementById('trade-get-money')?.addEventListener('input', (e) => {
     tradeOffer.getMoney = parseInt(e.target.value) || 0;
   });
 
