@@ -4,7 +4,7 @@
 
 import { BOARD, ALLIANCES, DEVELOPMENT_TIERS, GLOBAL_NEWS_CARDS, DIPLOMATIC_CABLE_CARDS,
          STARTING_MONEY, GO_SALARY, SANCTIONS_BAIL, INFLUENCE_TO_WIN, PLAYER_COLORS, PLAYER_AVATARS,
-         MAPS } from './gameData.js';
+         MAPS, FREE_TRADE_ZONE_BONUS, SUMMIT_MEETING_PAYOUT, OPERATING_COSTS } from './gameData.js';
 
 // ---- Utility ----
 function shuffle(arr) {
@@ -265,6 +265,42 @@ export class GameEngine {
     return cost;
   }
 
+  calculateOperatingCost(player) {
+    if (!player || player.bankrupt) return 0;
+
+    let cost = 0;
+    const possibleAlliances = new Set();
+
+    player.properties.forEach(pid => {
+      const space = this.getSpace(pid);
+      if (!space || space.owner !== player.id) return;
+
+      if (space.type === 'country') {
+        cost += OPERATING_COSTS.country;
+        cost += space.developmentLevel * OPERATING_COSTS.development;
+        if (space.alliance) possibleAlliances.add(space.alliance);
+        return;
+      }
+
+      if (space.type === 'transport') {
+        cost += OPERATING_COSTS.transport;
+        return;
+      }
+
+      if (space.type === 'infrastructure') {
+        cost += OPERATING_COSTS.infrastructure;
+      }
+    });
+
+    possibleAlliances.forEach(allianceId => {
+      if (this.hasCompleteAlliance(player.id, allianceId)) {
+        cost += OPERATING_COSTS.completeAlliance;
+      }
+    });
+
+    return cost;
+  }
+
   normalizeTradeMoney(value) {
     const amount = Number(value ?? 0);
     if (!Number.isFinite(amount) || amount < 0) return null;
@@ -477,7 +513,7 @@ export class GameEngine {
         break;
 
       case 'freetrade':
-        const bonus = 150;
+        const bonus = FREE_TRADE_ZONE_BONUS;
         this.adjustMoney(player, bonus);
         player.influence += 4;
         this.log(`${player.name} enters the Free Trade Zone! Collects $${bonus} and 4 influence.`, 'success');
@@ -922,7 +958,7 @@ export class GameEngine {
     const source = history.pop() || 'paid';
     const tier = DEVELOPMENT_TIERS[soldLevel];
     const refund = source === 'paid'
-      ? Math.floor(space.price * tier.costMultiplier * 0.5)
+      ? Math.floor(space.price * tier.costMultiplier * 0.4)
       : 0;
 
     space.developmentLevel = history.length;
@@ -946,7 +982,7 @@ export class GameEngine {
     if (!['country', 'transport', 'infrastructure'].includes(space.type)) return 0;
     if (!space.owner) return 0;
 
-    const baseMultiplier = space.mortgaged ? 0.25 : 0.5;
+    const baseMultiplier = space.mortgaged ? 0.15 : 0.4;
     let payout = Math.floor(space.price * baseMultiplier);
 
     // Full liquidation returns a smaller fraction of PAID development spend only.
@@ -957,7 +993,7 @@ export class GameEngine {
         if (history[level - 1] !== 'paid') continue;
         const tier = DEVELOPMENT_TIERS[level];
         const buildCost = Math.floor(space.price * tier.costMultiplier);
-        developmentRecovery += Math.floor(buildCost * 0.50);
+        developmentRecovery += Math.floor(buildCost * 0.35);
       }
       payout += developmentRecovery;
     }
@@ -1148,11 +1184,11 @@ export class GameEngine {
         break;
 
       case 'summit':
-        // Cost: 150 influence. All players gain $200
+        // Cost: 150 influence. All players gain a modest cash injection.
         if (player.influence < 150) return false;
         player.influence -= 150;
-        this.getActivePlayers().forEach(p => this.adjustMoney(p, 200));
-        this.log(`${player.name} calls a Summit Meeting! All players receive $200.`, 'influence');
+        this.getActivePlayers().forEach(p => this.adjustMoney(p, SUMMIT_MEETING_PAYOUT));
+        this.log(`${player.name} calls a Summit Meeting! All players receive $${SUMMIT_MEETING_PAYOUT}.`, 'influence');
         break;
 
       case 'development_grant':
@@ -1202,6 +1238,25 @@ export class GameEngine {
       this.log(`${player.name} gets another turn (doubles)!`, 'info');
       this.emit();
       return;
+    }
+
+    const operatingCost = this.calculateOperatingCost(player);
+    if (operatingCost > 0) {
+      this.adjustMoney(player, -operatingCost);
+      this.log(`${player.name} pays $${operatingCost} in operating costs.`, 'warning');
+
+      if (player.money < 0) {
+        if (this.hasLiquidatableAssets(player)) {
+          this.log(`${player.name} is insolvent after operating costs (-$${Math.abs(player.money)}). Liquidate assets before ending turn.`, 'warning');
+          this.emit();
+          return false;
+        }
+        this.declareBankruptcy(player);
+        if (!this.state.gameOver) {
+          this.nextTurn();
+        }
+        return false;
+      }
     }
 
     this.nextTurn();

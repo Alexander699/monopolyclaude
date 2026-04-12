@@ -237,6 +237,12 @@ Player avatars are defined in `js/gameData.js` in the `PLAYER_AVATARS` array. Ea
 
 ## Recent Changes (Latest First)
 
+### v1.9.3 - Economy Pressure Pass
+- **New operating costs:** ending a turn now charges upkeep based on owned assets and development, so large empires actually cost money to maintain and cash no longer inflates forever.
+- **Free money trimmed:** Free Trade Zone payout reduced to $75, and Summit Meeting now gives all active players $100 instead of $200.
+- **Harsher liquidation:** selling development and fully liquidating properties now returns less cash, making debt recovery possible but much less forgiving.
+- **Long-game pressure increased:** these changes push players toward tougher buy/develop decisions, more liquidations, and more realistic bankruptcy pressure in extended matches.
+
 ### v1.9.2 - Economy Rebalance (Faster Games)
 - **Starting money reduced:** $15,000 → $10,000 — tighter early game, harder buy decisions.
 - **GO salary reduced:** $2,000 → $1,500 — less free cash each lap.

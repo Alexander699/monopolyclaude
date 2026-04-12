@@ -306,5 +306,14 @@ export const STARTING_MONEY = 10000;
 export const GO_SALARY = 1500;
 export const SANCTIONS_BAIL = 700;
 export const INFLUENCE_TO_WIN = 3000;
+export const FREE_TRADE_ZONE_BONUS = 75;
+export const SUMMIT_MEETING_PAYOUT = 100;
+export const OPERATING_COSTS = Object.freeze({
+  country: 35,
+  transport: 90,
+  infrastructure: 70,
+  development: 110,
+  completeAlliance: 60
+});
 export const MAX_PLAYERS = 8;
 export const MIN_PLAYERS = 2;
